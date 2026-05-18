@@ -23,6 +23,7 @@ export const AppProvider = ({ children }) => {
   const [recommendations, setRecommendations] = useState([]);
   const [estimate, setEstimate] = useState({ items: [], consent: null, isPaid: false, managerApproved: false });
   const [jobsDb, setJobsDb] = useState([]);
+  const [activeJobId, setActiveJobId] = useState(null);
 
   // mock customer DB
   const [customersDb, setCustomersDb] = useState([
@@ -135,8 +136,9 @@ export const AppProvider = ({ children }) => {
   };
 
   const createJob = () => {
+    const newJobId = `JOB-${Date.now().toString().slice(-6)}`;
     const newJob = {
-      id: `JOB-${Date.now().toString().slice(-6)}`,
+      id: newJobId,
       customerName: currentCustomer?.name || 'Walk-in',
       customerMobile: currentCustomer?.mobile || '',
       vehicle: currentVehicle ? `${currentVehicle.make} ${currentVehicle.model}` : 'Unknown',
@@ -154,6 +156,8 @@ export const AppProvider = ({ children }) => {
       },
     };
     setJobsDb(prev => [...prev, newJob]);
+    setActiveJobId(newJobId);
+    return newJobId;
   };
 
   const updateJobStatus = (jobId, status) => {
@@ -169,7 +173,7 @@ export const AppProvider = ({ children }) => {
       inspectionData, setInspectionData,
       recommendations, setRecommendations, generateRecommendations,
       estimate, setEstimate,
-      jobsDb, setJobsDb, createJob, updateJobStatus, completeCheckout
+      jobsDb, setJobsDb, activeJobId, setActiveJobId, createJob, updateJobStatus, completeCheckout
     }}>
       {children}
     </AppContext.Provider>
