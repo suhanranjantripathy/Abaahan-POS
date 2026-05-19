@@ -5,7 +5,7 @@ import { Button, Input, Card } from '../components/ui';
 import { Wrench, ShieldCheck, Smartphone, KeyRound, UserCircle, ArrowRight, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby3CAdPHZU1haY0_M8MGhYkWCSVhZHLp2_WuA4XzZnEs4N46iGtxNWSO1ULNnbI78wH/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwaABq2wQffYVwKjq3MzpPweySrd_RwhtMxXv1j-1wo1y4tcYFtDVdbZGS-tONiZLdy/exec";
 
 const Login = () => {
   const { login } = useApp();
@@ -19,6 +19,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const checkMobile = async (e) => {
     e.preventDefault();
@@ -101,8 +102,82 @@ const Login = () => {
     }
   };
 
+  const handleResetPin = async () => {
+    setError('');
+    setLoading(true);
+    setShowResetConfirm(false);
+    
+    try {
+      const res = await fetch(`${SCRIPT_URL}?action=login&mobile=${phone}&reset=true`, {
+        method: 'GET',
+      });
+      
+      const rawText = await res.text();
+      
+      try {
+        const data = JSON.parse(rawText);
+        
+        if (data.status === 'first_login') {
+          setSuccessMessage(data.message);
+          setPin('');
+        } else {
+          setError(data.message);
+        }
+      } catch (parseError) {
+        console.error("Failed to parse Google response during reset:", rawText);
+        setError('Server returned invalid data during reset.');
+      }
+    } catch (err) {
+      setError(`Network error during reset: ${err.message}`);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-slate-50 relative">
+      {/* Reset Confirmation Modal */}
+      <AnimatePresence>
+        {showResetConfirm && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100"
+            >
+              <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mb-4">
+                <KeyRound className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Reset Secure PIN?</h3>
+              <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+                Are you sure you want to reset your PIN? This will generate a brand new PIN and email it to your registered email address.
+              </p>
+              <div className="flex gap-3">
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={() => setShowResetConfirm(false)}
+                  className="flex-1 h-12 font-bold"
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="button" 
+                  onClick={handleResetPin}
+                  className="flex-1 h-12 font-bold bg-amber-600 hover:bg-amber-700 text-white border-transparent"
+                  disabled={loading}
+                >
+                  {loading ? "Resetting..." : "Yes, Reset"}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="hidden lg:flex flex-1 bg-primary-600 relative overflow-hidden items-center justify-center p-12">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1549643276-fbc2d8ca11e7?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80')] bg-cover bg-center mix-blend-overlay opacity-30"></div>
         <div className="relative z-10 text-white max-w-lg">
@@ -186,6 +261,16 @@ const Login = () => {
                          className="pl-10 font-bold tracking-widest text-2xl h-14"
                          autoFocus
                        />
+                    </div>
+
+                    <div className="flex justify-end -mt-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setShowResetConfirm(true)}
+                        className="text-sm text-primary-600 hover:text-primary-700 font-bold hover:underline"
+                      >
+                        Forgot PIN?
+                      </button>
                     </div>
 
                     {error && <p className="text-xs font-bold text-red-500">{error}</p>}
