@@ -34,8 +34,19 @@ export const AppProvider = ({ children }) => {
     }
   ]);
 
-  const login = (role) => {
-    setUser({ role, name: role === 'Store Manager' ? 'Manager Mike' : role === 'Technician' ? 'Tech Tom' : 'Exec Emma' });
+  const login = (userData) => {
+    if (typeof userData === 'string') {
+      setUser({ role: userData, name: userData === 'Store Manager' ? 'Manager Mike' : userData === 'Technician' ? 'Tech Tom' : 'Exec Emma' });
+    } else {
+      // Normalize role from Google Sheet so the Dashboard tiles appear correctly
+      let normalizedRole = 'POS Executive';
+      const rawRole = (userData.role || '').toLowerCase();
+      
+      if (rawRole.includes('manager')) normalizedRole = 'Store Manager';
+      else if (rawRole.includes('tech')) normalizedRole = 'Technician';
+      
+      setUser({ role: normalizedRole, name: userData.name, mobile: userData.mobile });
+    }
   };
   const logout = () => setUser(null);
 
