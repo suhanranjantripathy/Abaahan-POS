@@ -182,8 +182,8 @@ const Login = () => {
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1549643276-fbc2d8ca11e7?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80')] bg-cover bg-center mix-blend-overlay opacity-30"></div>
         <div className="relative z-10 text-white max-w-lg">
           <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
-            <h1 className="text-5xl font-extrabold tracking-tight mb-6 leading-tight">Secure Employee Access.</h1>
-            <p className="text-xl text-primary-100 font-medium leading-relaxed">Protected with role-based parameters and multi-layered PIN + 2FA mobile recovery.</p>
+            <h1 className="text-5xl font-extrabold tracking-tight mb-6 leading-tight">Secure Employee Portal.</h1>
+            <p className="text-xl text-primary-100 font-medium leading-relaxed">Integrated with Google Sheets databases, secure email PIN check-in, and role-based terminal access.</p>
           </motion.div>
         </div>
       </div>
