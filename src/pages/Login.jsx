@@ -5,7 +5,7 @@ import { Button, Input, Card } from '../components/ui';
 import { Wrench, ShieldCheck, Smartphone, KeyRound, UserCircle, ArrowRight, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw3BzqmR3Y_AQQDHNJ0saBUtxxB4Lxi-N4cdUAbl5dapGJ_fce2bVADZ9d30kyQr2GE/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw5WkPLdMaAbWRRh6Qzz7lJmRtFbs6xyGc_rxy2vIAxeASzxO5siTyewkPndvqgB5r7/exec";
 
 const Login = () => {
   const { login } = useApp();
