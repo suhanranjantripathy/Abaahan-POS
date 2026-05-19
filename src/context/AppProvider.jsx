@@ -6,7 +6,23 @@ const AppContext = createContext();
 export const useApp = () => useContext(AppContext);
 
 export const AppProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // { role: 'Store Manager' }
+  const [user, setUser] = useState(() => {
+    const savedSession = localStorage.getItem('abhyaan_session');
+    if (savedSession) {
+      try {
+        const { user, loginTime } = JSON.parse(savedSession);
+        const hoursPassed = (Date.now() - loginTime) / (1000 * 60 * 60);
+        if (hoursPassed < 24) {
+          return user;
+        } else {
+          localStorage.removeItem('abhyaan_session');
+        }
+      } catch (e) {
+        console.error("Error loading session from localStorage", e);
+      }
+    }
+    return null;
+  });
   const [currentCustomer, setCurrentCustomer] = useState(null);
   const [currentVehicle, setCurrentVehicle] = useState(null);
   const [inspectionData, setInspectionData] = useState({
@@ -35,8 +51,9 @@ export const AppProvider = ({ children }) => {
   ]);
 
   const login = (userData) => {
+    let resolvedUser;
     if (typeof userData === 'string') {
-      setUser({ role: userData, name: userData === 'Store Manager' ? 'Manager Mike' : userData === 'Technician' ? 'Tech Tom' : 'Exec Emma' });
+      resolvedUser = { role: userData, name: userData === 'Store Manager' ? 'Manager Mike' : userData === 'Technician' ? 'Tech Tom' : 'Exec Emma' };
     } else {
       // Normalize role from Google Sheet so the Dashboard tiles appear correctly
       let normalizedRole = 'POS Executive';
@@ -45,10 +62,18 @@ export const AppProvider = ({ children }) => {
       if (rawRole.includes('manager')) normalizedRole = 'Store Manager';
       else if (rawRole.includes('tech')) normalizedRole = 'Technician';
       
-      setUser({ role: normalizedRole, name: userData.name, mobile: userData.mobile });
+      resolvedUser = { role: normalizedRole, name: userData.name, mobile: userData.mobile };
     }
+    setUser(resolvedUser);
+    localStorage.setItem('abhyaan_session', JSON.stringify({
+      user: resolvedUser,
+      loginTime: Date.now()
+    }));
   };
-  const logout = () => setUser(null);
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('abhyaan_session');
+  };
 
   const lookupCustomer = (mobile) => {
     return customersDb.find(c => c.mobile === mobile) || null;
