@@ -9,7 +9,7 @@ const CustomerLookup = () => {
   const [mobile, setMobile] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { lookupCustomer, setCurrentCustomer, customersDb } = useApp();
+  const { lookupCustomer, setCurrentCustomer, customersDb, selectCustomer } = useApp();
 
   const handleLookup = (e) => {
     e.preventDefault();
@@ -21,7 +21,7 @@ const CustomerLookup = () => {
 
     const customer = lookupCustomer(mobile);
     if (customer) {
-      setCurrentCustomer(customer);
+      selectCustomer(customer);
       navigate('/summary');
     } else {
       // Pass the mobile number to the next screen using routing state
@@ -101,7 +101,7 @@ const CustomerLookup = () => {
                   initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + (i * 0.1) }}
                   key={c.id || i}
                   onClick={() => {
-                     setCurrentCustomer(c);
+                     selectCustomer(c);
                      navigate('/summary');
                   }}
                   className="w-full text-left bg-white/60 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-slate-100 hover:border-primary-300 hover:shadow-lg hover:bg-white transition-all duration-300 flex justify-between items-center group"
@@ -109,6 +109,14 @@ const CustomerLookup = () => {
                    <div>
                      <p className="font-bold text-lg text-slate-900 tracking-tight group-hover:text-primary-700 transition-colors">{c.name}</p>
                      <p className="text-sm text-slate-500 font-medium mt-1">{c.mobile} • {c.vehicles?.length || 0} vehicle(s)</p>
+                     {c.lastVisit && (
+                       <p className="text-xs text-slate-400 font-medium mt-0.5 flex items-center gap-1">
+                         <span>🕐</span>
+                         Last visit: {new Date(c.lastVisit).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                         {' at '}
+                         {new Date(c.lastVisit).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                       </p>
+                     )}
                    </div>
                    <div className="bg-slate-50 p-3 rounded-xl group-hover:bg-primary-50 group-hover:scale-110 border border-slate-100 group-hover:border-primary-200 transition-all duration-300 shadow-sm">
                      <ArrowRight size={20} className="text-slate-400 group-hover:text-primary-600" />

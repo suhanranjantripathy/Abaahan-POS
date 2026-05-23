@@ -38,10 +38,10 @@ function ReportCarDiagram({ inspectionData }) {
     good: '#10b981', uneven: '#f59e0b', cracks: '#ef4444', bulge: '#f43f5e',
   };
   const positions = {
-    FL: { x: 32,  y: 46 },
-    FR: { x: 118, y: 46 },
-    RL: { x: 32,  y: 110 },
-    RR: { x: 118, y: 110 },
+    FL: { x: 36,  y: 46 },
+    FR: { x: 128, y: 46 },
+    RL: { x: 36,  y: 110 },
+    RR: { x: 128, y: 110 },
   };
   const tw = 16, th = 28;
   return (
@@ -123,7 +123,7 @@ function BatteryGauge({ health }) {
   });
 
   return (
-    <svg viewBox="0 0 180 100" width="180" height="100" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 180 130" width="180" height="130" xmlns="http://www.w3.org/2000/svg">
       <defs>
         {/* Glow filter */}
         <filter id="gaugeGlow" x="-30%" y="-30%" width="160%" height="160%">
@@ -456,7 +456,7 @@ const DigitalReport = () => {
                 border: '1px solid #e2e8f0',
                 borderRadius: 16,
                 background: 'linear-gradient(160deg, #f0fdf4 0%, #f8fafc 60%, #eff6ff 100%)',
-                overflow: 'hidden',
+                overflow: 'visible',
                 boxShadow: '0 1px 6px #0000000a',
               }}>
                 {/* Card header */}

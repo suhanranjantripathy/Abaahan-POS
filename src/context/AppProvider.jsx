@@ -46,7 +46,8 @@ export const AppProvider = ({ children }) => {
     {
       id: 1, name: 'John Doe', mobile: '9876543210', city: 'Mumbai', consent: true, email: 'john@example.com', dob: '1990-01-01',
       vehicles: [{ make: 'Honda', model: 'City', year: '2020', fuelType: 'Petrol', odometer: '45000' }],
-      pastInspections: [], purchaseHistory: [], pendingRecommendations: [], loyalty: 150
+      pastInspections: [], purchaseHistory: [], pendingRecommendations: [], loyalty: 150,
+      lastVisit: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days ago
     }
   ]);
 
@@ -80,9 +81,16 @@ export const AppProvider = ({ children }) => {
   };
 
   const addCustomer = (customerData) => {
-    const newCustomer = { id: Date.now(), ...customerData, loyalty: 0, vehicles: [], pastInspections: [], purchaseHistory: [], pendingRecommendations: [] };
-    setCustomersDb([...customersDb, newCustomer]);
+    const newCustomer = { id: Date.now(), ...customerData, loyalty: 0, vehicles: [], pastInspections: [], purchaseHistory: [], pendingRecommendations: [], lastVisit: new Date().toISOString() };
+    setCustomersDb(prev => [...prev, newCustomer]);
     setCurrentCustomer(newCustomer);
+  };
+
+  // Stamp lastVisit whenever a customer is selected from the lookup
+  const selectCustomer = (customer) => {
+    const stamped = { ...customer, lastVisit: new Date().toISOString() };
+    setCurrentCustomer(stamped);
+    setCustomersDb(prev => prev.map(c => c.id === stamped.id ? stamped : c));
   };
 
   const addVehicle = (vehicle) => {
@@ -204,7 +212,7 @@ export const AppProvider = ({ children }) => {
     <AppContext.Provider value={{
       user, login, logout,
       customersDb,
-      currentCustomer, setCurrentCustomer, lookupCustomer, addCustomer,
+      currentCustomer, setCurrentCustomer, lookupCustomer, addCustomer, selectCustomer,
       currentVehicle, setCurrentVehicle, addVehicle,
       inspectionData, setInspectionData,
       recommendations, setRecommendations, generateRecommendations,

@@ -62,9 +62,8 @@ function CarBirdEye({ profile, selectedTyre, onSelectTyre, inspectionData, batte
   return (
     <svg
       viewBox="0 0 200 275"
-      width="100%"
-      height="100%"
-      style={{ maxHeight: '100%', maxWidth: '100%' }}
+      preserveAspectRatio="xMidYMid meet"
+      style={{ width: '100%', height: '100%', maxHeight: '100%', maxWidth: '100%', display: 'block' }}
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
@@ -379,7 +378,10 @@ const VehicleInspection = () => {
             </p>
 
             {/* SVG area */}
-            <div className="flex-1 flex items-center justify-center" style={{ minHeight: 200 }}>
+            <div
+              className="flex-1 flex items-center justify-center"
+              style={{ minHeight: 200, aspectRatio: '200/275' }}
+            >
               <CarBirdEye
                 profile={profile}
                 selectedTyre={selectedTyre}

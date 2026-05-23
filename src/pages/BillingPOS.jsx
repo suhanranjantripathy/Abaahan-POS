@@ -1,12 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppProvider';
 import { Button, Card } from '../components/ui';
 import { CheckCircle2, ShieldAlert, CreditCard, Banknote, Landmark, Smartphone, ReceiptText, Lock, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+// Utility to load Razorpay script dynamically
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
 const BillingPOS = () => {
-  const { estimate, setEstimate, completeCheckout, createJob, activeJobId, jobsDb } = useApp();
+  const { estimate, setEstimate, completeCheckout, createJob, activeJobId, jobsDb, currentCustomer } = useApp();
   const navigate = useNavigate();
   const [consentGiven, setConsentGiven] = useState(estimate.consent || false);
   const [paymentMode, setPaymentMode] = useState('');
@@ -19,6 +34,11 @@ const BillingPOS = () => {
   const activeJob = jobsDb.find(j => j.id === activeJobId);
   const isJobCompleted = activeJob?.status === 'Completed';
 
+  // Pre-load script for faster checkout
+  useEffect(() => {
+    loadRazorpayScript();
+  }, []);
+
   const handleConsent = (c) => {
     setConsentGiven(c);
     setEstimate({ ...estimate, consent: c });
@@ -27,11 +47,61 @@ const BillingPOS = () => {
     }
   };
 
-  const handleCheckout = () => {
-    if (!paymentMode || !isJobCompleted) return;
+  const processSuccess = () => {
     completeCheckout(paymentMode, total);
     alert("Payment successful! Auto-Reminder set for 6 months. Feedback & Review link has been SMS'd to the customer.");
     navigate('/report'); // Auto gen report after checkout
+  };
+
+  const handleCheckout = async () => {
+    if (!paymentMode || !isJobCompleted) return;
+
+    // If Cash is selected, bypass digital payment gateway
+    if (paymentMode === 'Cash') {
+      processSuccess();
+      return;
+    }
+
+    // Scaffolding Razorpay for UPI, Card, NetBank
+    const res = await loadRazorpayScript();
+    
+    if (!res) {
+      alert("Razorpay SDK failed to load. Are you online?");
+      return;
+    }
+
+    // Options for Razorpay Integration
+    const options = {
+      key: "rzp_test_YOUR_KEY_HERE", // TODO: Replace with environment variable
+      amount: Math.round(total * 100), // Razorpay expects amount in paise
+      currency: "INR",
+      name: "Abaahan POS",
+      description: `Payment for Job ${activeJobId}`,
+      image: "https://your-domain.com/logo.png",
+      // order_id: "order_9A33XWu170gUtm", // TODO: Fetch from backend Order API
+      handler: function (response) {
+        // Successful payment callback
+        console.log("Razorpay Payment ID:", response.razorpay_payment_id);
+        // TODO: Verify signature on backend here
+        processSuccess();
+      },
+      prefill: {
+        name: currentCustomer?.name || "Walk-in Customer",
+        contact: currentCustomer?.mobile || "",
+        email: currentCustomer?.email || "",
+      },
+      theme: {
+        color: "#2563eb", // Matches primary-600
+      },
+    };
+
+    const paymentObject = new window.Razorpay(options);
+    
+    paymentObject.on('payment.failed', function (response){
+        alert(`Payment Failed! Reason: ${response.error.description}`);
+    });
+
+    paymentObject.open();
   };
 
   return (
@@ -160,7 +230,7 @@ const BillingPOS = () => {
                       disabled={!paymentMode}
                       onClick={handleCheckout}
                     >
-                      Generate Invoice & Collect ₹{total.toLocaleString()}
+                      {paymentMode === 'Cash' ? `Collect Cash ₹${total.toLocaleString()}` : `Pay via ${paymentMode} ₹${total.toLocaleString()}`}
                     </Button>
                  </div>
                </div>
