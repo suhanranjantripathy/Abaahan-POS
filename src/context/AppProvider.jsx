@@ -4,6 +4,7 @@ const AppContext = createContext();
 const SEVEN_DAYS_AGO = '2026-05-17T00:00:00.000Z';
 const CUSTOMERS_STORAGE_KEY = 'abhyaan_customers_db';
 const INSPECTION_LOGS_STORAGE_KEY = 'abhyaan_inspection_logs';
+const SESSION_STORAGE_KEY = 'abhyaan_session';
 
 const createInitialInspectionData = () => ({
   tyres: {
@@ -36,12 +37,19 @@ const loadStoredArray = (key, fallback) => {
   }
 };
 
+const saveSharedArray = (key, value) => {
+  const nextValue = JSON.stringify(value);
+  if (localStorage.getItem(key) !== nextValue) {
+    localStorage.setItem(key, nextValue);
+  }
+};
+
 // eslint-disable-next-line react-refresh/only-export-components
 export const useApp = () => useContext(AppContext);
 
 export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
-    const savedSession = localStorage.getItem('abhyaan_session');
+    const savedSession = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (savedSession) {
       try {
         const { user, loginTime } = JSON.parse(savedSession);
@@ -49,10 +57,10 @@ export const AppProvider = ({ children }) => {
         if (hoursPassed < 24) {
           return user;
         } else {
-          localStorage.removeItem('abhyaan_session');
+          sessionStorage.removeItem(SESSION_STORAGE_KEY);
         }
       } catch (e) {
-        console.error("Error loading session from localStorage", e);
+        console.error("Error loading session from sessionStorage", e);
       }
     }
     return null;
@@ -72,12 +80,33 @@ export const AppProvider = ({ children }) => {
   const [customersDb, setCustomersDb] = useState(() => loadStoredArray(CUSTOMERS_STORAGE_KEY, seedCustomers));
 
   useEffect(() => {
-    localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(customersDb));
+    saveSharedArray(CUSTOMERS_STORAGE_KEY, customersDb);
   }, [customersDb]);
 
   useEffect(() => {
-    localStorage.setItem(INSPECTION_LOGS_STORAGE_KEY, JSON.stringify(inspectionLogs));
+    saveSharedArray(INSPECTION_LOGS_STORAGE_KEY, inspectionLogs);
   }, [inspectionLogs]);
+
+  useEffect(() => {
+    const handleSharedStorage = (event) => {
+      if (!event.newValue) return;
+
+      try {
+        if (event.key === CUSTOMERS_STORAGE_KEY) {
+          setCustomersDb(prev => JSON.stringify(prev) === event.newValue ? prev : JSON.parse(event.newValue));
+        }
+
+        if (event.key === INSPECTION_LOGS_STORAGE_KEY) {
+          setInspectionLogs(prev => JSON.stringify(prev) === event.newValue ? prev : JSON.parse(event.newValue));
+        }
+      } catch (e) {
+        console.error("Error syncing shared app data from localStorage", e);
+      }
+    };
+
+    window.addEventListener('storage', handleSharedStorage);
+    return () => window.removeEventListener('storage', handleSharedStorage);
+  }, []);
 
   const login = (userData) => {
     let resolvedUser;
@@ -94,14 +123,15 @@ export const AppProvider = ({ children }) => {
       resolvedUser = { role: normalizedRole, name: userData.name, mobile: userData.mobile };
     }
     setUser(resolvedUser);
-    localStorage.setItem('abhyaan_session', JSON.stringify({
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
       user: resolvedUser,
       loginTime: Date.now()
     }));
   };
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('abhyaan_session');
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
   };
 
   const lookupCustomer = (mobile) => {
