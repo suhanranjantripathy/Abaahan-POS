@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 const AppContext = createContext();
 const SEVEN_DAYS_AGO = '2026-05-17T00:00:00.000Z';
+const CUSTOMERS_STORAGE_KEY = 'abhyaan_customers_db';
+const INSPECTION_LOGS_STORAGE_KEY = 'abhyaan_inspection_logs';
 
 const createInitialInspectionData = () => ({
   tyres: {
@@ -14,6 +16,25 @@ const createInitialInspectionData = () => ({
   battery: { health: 'good', age: '', status: '' },
   usage: { monthlyKm: '', drivingStyle: 'normal', terrain: 'city' }
 });
+
+const seedCustomers = [
+  {
+    id: 1, name: 'John Doe', mobile: '9876543210', city: 'Mumbai', consent: true, email: 'john@example.com', dob: '1990-01-01',
+    vehicles: [{ id: 'VEH-SEED-1', make: 'Honda', model: 'City', year: '2020', fuelType: 'Petrol', odometer: '45000' }],
+    pastInspections: [], purchaseHistory: [], pendingRecommendations: [], loyalty: 150,
+    lastVisit: SEVEN_DAYS_AGO,
+  }
+];
+
+const loadStoredArray = (key, fallback) => {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : fallback;
+  } catch (e) {
+    console.error(`Error loading ${key} from localStorage`, e);
+    return fallback;
+  }
+};
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const useApp = () => useContext(AppContext);
@@ -44,18 +65,19 @@ export const AppProvider = ({ children }) => {
   const [estimate, setEstimate] = useState({ items: [], consent: null, isPaid: false, managerApproved: false });
   const [jobsDb, setJobsDb] = useState([]);
   const [activeJobId, setActiveJobId] = useState(null);
-  const [inspectionLogs, setInspectionLogs] = useState([]);
+  const [inspectionLogs, setInspectionLogs] = useState(() => loadStoredArray(INSPECTION_LOGS_STORAGE_KEY, []));
   const [activeInspectionLogId, setActiveInspectionLogId] = useState(null);
 
   // mock customer DB
-  const [customersDb, setCustomersDb] = useState([
-    {
-      id: 1, name: 'John Doe', mobile: '9876543210', city: 'Mumbai', consent: true, email: 'john@example.com', dob: '1990-01-01',
-      vehicles: [{ id: 'VEH-SEED-1', make: 'Honda', model: 'City', year: '2020', fuelType: 'Petrol', odometer: '45000' }],
-      pastInspections: [], purchaseHistory: [], pendingRecommendations: [], loyalty: 150,
-      lastVisit: SEVEN_DAYS_AGO,
-    }
-  ]);
+  const [customersDb, setCustomersDb] = useState(() => loadStoredArray(CUSTOMERS_STORAGE_KEY, seedCustomers));
+
+  useEffect(() => {
+    localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(customersDb));
+  }, [customersDb]);
+
+  useEffect(() => {
+    localStorage.setItem(INSPECTION_LOGS_STORAGE_KEY, JSON.stringify(inspectionLogs));
+  }, [inspectionLogs]);
 
   const login = (userData) => {
     let resolvedUser;
@@ -113,6 +135,9 @@ export const AppProvider = ({ children }) => {
         customerId: currentCustomer.id,
         customerName: currentCustomer.name,
         customerMobile: currentCustomer.mobile,
+        customerCity: currentCustomer.city,
+        customerEmail: currentCustomer.email,
+        customerConsent: currentCustomer.consent,
         vehicleId: vehicleWithId.id,
         vehicleLabel: `${vehicleWithId.make} ${vehicleWithId.model}`,
         vehicleYear: vehicleWithId.year,
@@ -153,7 +178,21 @@ export const AppProvider = ({ children }) => {
       odometer: log.vehicleOdometer,
     };
 
-    if (customer) setCurrentCustomer(customer);
+    const fallbackCustomer = {
+      id: log.customerId,
+      name: log.customerName,
+      mobile: log.customerMobile,
+      city: log.customerCity || '',
+      email: log.customerEmail || '',
+      consent: log.customerConsent ?? true,
+      vehicles: [vehicle],
+      pastInspections: [],
+      purchaseHistory: [],
+      pendingRecommendations: [],
+      loyalty: 0,
+    };
+
+    setCurrentCustomer(customer || fallbackCustomer);
     setCurrentVehicle(vehicle);
     setActiveInspectionLogId(logId);
     setInspectionCompleted(false);
