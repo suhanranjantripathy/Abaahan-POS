@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppProvider';
 import { Button } from '../components/ui';
@@ -262,12 +262,13 @@ const DigitalReport = () => {
   const estimate = isHistoric ? snapshot?.estimate : liveContext.estimate;
 
   const reportRef = useRef(null);
+  const liveReportId = useId();
   const [sharing, setSharing] = useState(false);
 
   const reportDate = isHistoric ? new Date(jobRecord.date) : new Date();
   const date = reportDate.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
   const time = reportDate.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
-  const reportId = isHistoric ? jobRecord.id : useRef(`REP-${Math.floor(100000 + Math.random() * 900000)}`).current;
+  const reportId = isHistoric ? jobRecord.id : `REP-${liveReportId.replace(/\W/g, '').toUpperCase()}`;
 
   const hasCritical = recommendations.some(r => r.status === 'replace_now');
 

@@ -1,6 +1,19 @@
 import React, { createContext, useContext, useState } from 'react';
 
 const AppContext = createContext();
+const SEVEN_DAYS_AGO = '2026-05-17T00:00:00.000Z';
+
+const createInitialInspectionData = () => ({
+  tyres: {
+    FL: { brand: '', size: '', pressure: '', tread: '', condition: 'good' },
+    FR: { brand: '', size: '', pressure: '', tread: '', condition: 'good' },
+    RL: { brand: '', size: '', pressure: '', tread: '', condition: 'good' },
+    RR: { brand: '', size: '', pressure: '', tread: '', condition: 'good' },
+    Spare: { brand: '', size: '', pressure: '', tread: '', condition: 'good' }
+  },
+  battery: { health: 'good', age: '', status: '' },
+  usage: { monthlyKm: '', drivingStyle: 'normal', terrain: 'city' }
+});
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const useApp = () => useContext(AppContext);
@@ -25,29 +38,22 @@ export const AppProvider = ({ children }) => {
   });
   const [currentCustomer, setCurrentCustomer] = useState(null);
   const [currentVehicle, setCurrentVehicle] = useState(null);
-  const [inspectionData, setInspectionData] = useState({
-    tyres: {
-      FL: { brand: '', size: '', pressure: '', tread: '', condition: 'good' },
-      FR: { brand: '', size: '', pressure: '', tread: '', condition: 'good' },
-      RL: { brand: '', size: '', pressure: '', tread: '', condition: 'good' },
-      RR: { brand: '', size: '', pressure: '', tread: '', condition: 'good' },
-      Spare: { brand: '', size: '', pressure: '', tread: '', condition: 'good' }
-    },
-    battery: { health: 'good', age: '', status: '' },
-    usage: { monthlyKm: '', drivingStyle: 'normal', terrain: 'city' }
-  });
+  const [inspectionCompleted, setInspectionCompleted] = useState(false);
+  const [inspectionData, setInspectionData] = useState(createInitialInspectionData);
   const [recommendations, setRecommendations] = useState([]);
   const [estimate, setEstimate] = useState({ items: [], consent: null, isPaid: false, managerApproved: false });
   const [jobsDb, setJobsDb] = useState([]);
   const [activeJobId, setActiveJobId] = useState(null);
+  const [inspectionLogs, setInspectionLogs] = useState([]);
+  const [activeInspectionLogId, setActiveInspectionLogId] = useState(null);
 
   // mock customer DB
   const [customersDb, setCustomersDb] = useState([
     {
       id: 1, name: 'John Doe', mobile: '9876543210', city: 'Mumbai', consent: true, email: 'john@example.com', dob: '1990-01-01',
-      vehicles: [{ make: 'Honda', model: 'City', year: '2020', fuelType: 'Petrol', odometer: '45000' }],
+      vehicles: [{ id: 'VEH-SEED-1', make: 'Honda', model: 'City', year: '2020', fuelType: 'Petrol', odometer: '45000' }],
       pastInspections: [], purchaseHistory: [], pendingRecommendations: [], loyalty: 150,
-      lastVisit: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days ago
+      lastVisit: SEVEN_DAYS_AGO,
     }
   ]);
 
@@ -91,22 +97,85 @@ export const AppProvider = ({ children }) => {
     const stamped = { ...customer, lastVisit: new Date().toISOString() };
     setCurrentCustomer(stamped);
     setCustomersDb(prev => prev.map(c => c.id === stamped.id ? stamped : c));
+    setInspectionCompleted(false);
   };
 
   const addVehicle = (vehicle) => {
     if (currentCustomer) {
-      const updatedVehicles = [...currentCustomer.vehicles, vehicle];
-      setCurrentCustomer({
+      const vehicleWithId = { id: `VEH-${Date.now()}`, ...vehicle };
+      const updatedVehicles = [...currentCustomer.vehicles, vehicleWithId];
+      const updatedCustomer = {
         ...currentCustomer,
         vehicles: updatedVehicles
-      });
-      setCurrentVehicle(vehicle);
+      };
+      const inspectionLog = {
+        id: `INS-${Date.now().toString().slice(-6)}`,
+        customerId: currentCustomer.id,
+        customerName: currentCustomer.name,
+        customerMobile: currentCustomer.mobile,
+        vehicleId: vehicleWithId.id,
+        vehicleLabel: `${vehicleWithId.make} ${vehicleWithId.model}`,
+        vehicleYear: vehicleWithId.year,
+        vehicleFuelType: vehicleWithId.fuelType,
+        vehicleOdometer: vehicleWithId.odometer,
+        status: 'pending',
+        requestedBy: user?.name || 'POS Desk',
+        requestedByRole: user?.role || 'POS Executive',
+        requestedAt: new Date().toISOString(),
+      };
+
+      setCurrentCustomer(updatedCustomer);
+      setCurrentVehicle(vehicleWithId);
+      setInspectionCompleted(false);
+      setInspectionData(createInitialInspectionData());
+      setRecommendations([]);
+      setEstimate({ items: [], consent: null, isPaid: false, managerApproved: false });
+      setInspectionLogs(prev => [inspectionLog, ...prev]);
       
       // Update persistent DB mock
       setCustomersDb(prev => prev.map(c => 
          c.id === currentCustomer.id ? { ...c, vehicles: updatedVehicles } : c
       ));
     }
+  };
+
+  const startInspectionFromLog = (logId) => {
+    const log = inspectionLogs.find(item => item.id === logId);
+    if (!log) return false;
+
+    const customer = customersDb.find(c => c.id === log.customerId);
+    const vehicle = customer?.vehicles?.find(v => v.id === log.vehicleId) || {
+      id: log.vehicleId,
+      make: log.vehicleLabel.split(' ')[0],
+      model: log.vehicleLabel.split(' ').slice(1).join(' '),
+      year: log.vehicleYear,
+      fuelType: log.vehicleFuelType,
+      odometer: log.vehicleOdometer,
+    };
+
+    if (customer) setCurrentCustomer(customer);
+    setCurrentVehicle(vehicle);
+    setActiveInspectionLogId(logId);
+    setInspectionCompleted(false);
+    setInspectionData(createInitialInspectionData());
+    setRecommendations([]);
+    setEstimate({ items: [], consent: null, isPaid: false, managerApproved: false });
+    setInspectionLogs(prev => prev.map(item => 
+      item.id === logId
+        ? { ...item, status: 'in_progress', startedAt: item.startedAt || new Date().toISOString(), technicianName: user?.name || 'Technician' }
+        : item
+    ));
+
+    return true;
+  };
+
+  const completeInspectionLog = () => {
+    if (!activeInspectionLogId) return;
+    setInspectionLogs(prev => prev.map(item => 
+      item.id === activeInspectionLogId
+        ? { ...item, status: 'completed', completedAt: new Date().toISOString() }
+        : item
+    ));
   };
 
   const generateRecommendations = () => {
@@ -214,6 +283,8 @@ export const AppProvider = ({ children }) => {
       customersDb,
       currentCustomer, setCurrentCustomer, lookupCustomer, addCustomer, selectCustomer,
       currentVehicle, setCurrentVehicle, addVehicle,
+      inspectionCompleted, setInspectionCompleted,
+      inspectionLogs, activeInspectionLogId, startInspectionFromLog, completeInspectionLog,
       inspectionData, setInspectionData,
       recommendations, setRecommendations, generateRecommendations,
       estimate, setEstimate,

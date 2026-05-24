@@ -9,7 +9,7 @@ const CustomerLookup = () => {
   const [mobile, setMobile] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { lookupCustomer, setCurrentCustomer, customersDb, selectCustomer } = useApp();
+  const { lookupCustomer, customersDb, selectCustomer } = useApp();
 
   const handleLookup = (e) => {
     e.preventDefault();

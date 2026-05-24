@@ -298,7 +298,7 @@ const COND_META = {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 const VehicleInspection = () => {
-  const { inspectionData, setInspectionData, currentVehicle, generateRecommendations } = useApp();
+  const { inspectionData, setInspectionData, currentVehicle, generateRecommendations, setInspectionCompleted, completeInspectionLog } = useApp();
   const navigate = useNavigate();
 
   const [selectedTyre, setSelectedTyre] = useState(null); // null | 'FL'|'FR'|'RL'|'RR'|'Spare'
@@ -331,6 +331,8 @@ const VehicleInspection = () => {
 
   const completeInspection = () => {
     generateRecommendations();
+    setInspectionCompleted(true);
+    completeInspectionLog();
     navigate('/recommendation');
   };
 

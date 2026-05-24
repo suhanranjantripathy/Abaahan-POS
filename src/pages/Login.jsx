@@ -50,7 +50,7 @@ const Login = () => {
         } else {
           setError(data.message);
         }
-      } catch (parseError) {
+      } catch {
         console.error("Failed to parse Google response:", rawText);
         setError('Server returned invalid data. Check sheet name or deployment.');
       }
@@ -89,7 +89,7 @@ const Login = () => {
          } else {
            setError(data.message);
          }
-      } catch (parseError) {
+      } catch {
          console.error("Failed to parse Google response:", rawText);
          setError('Server returned invalid data.');
       }
@@ -123,7 +123,7 @@ const Login = () => {
         } else {
           setError(data.message);
         }
-      } catch (parseError) {
+      } catch {
         console.error("Failed to parse Google response during reset:", rawText);
         setError('Server returned invalid data during reset.');
       }

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppProvider';
 import { Button, Card } from '../components/ui';
 import { MessageCircle, FileDown, CheckCircle, ChevronRight, Calculator, Lock, Unlock } from 'lucide-react';
-// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 
 const EstimateBuilder = () => {

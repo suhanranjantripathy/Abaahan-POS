@@ -1,7 +1,6 @@
 import React from 'react';
 import { Card, Button } from '../components/ui';
 import { BarChart3, Users, Gift, TrendingUp, ShieldCheck } from 'lucide-react';
-// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 
 const LoyaltyReports = () => {

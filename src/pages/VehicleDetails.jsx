@@ -5,7 +5,7 @@ import { Button, Input, Card } from '../components/ui';
 import { Car, Fuel, Calendar, Gauge } from 'lucide-react';
 
 const VehicleDetails = () => {
-  const { addVehicle, currentCustomer } = useApp();
+  const { addVehicle, currentCustomer, user } = useApp();
   const navigate = useNavigate();
 
   const [vehicle, setVehicle] = useState({
@@ -46,7 +46,7 @@ const VehicleDetails = () => {
     if (!vehicle.make || !vehicle.model) return;
     
     addVehicle(vehicle);
-    navigate('/inspection');
+    navigate(user?.role === 'POS Executive' ? '/summary' : '/inspection');
   };
 
   return (
@@ -146,7 +146,7 @@ const VehicleDetails = () => {
           </div>
 
           <Button type="submit" size="lg" className="w-full">
-            Save & Start Inspection
+            {user?.role === 'POS Executive' ? 'Save & Queue Inspection' : 'Save & Start Inspection'}
           </Button>
         </form>
       </Card>

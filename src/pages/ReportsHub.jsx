@@ -6,7 +6,6 @@ import {
   FileText, Eye, Clock, CheckCircle2, AlertTriangle,
   Car, User, Calendar, ArrowRight, ClipboardList,
 } from 'lucide-react';
-// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 
 const COND_COLOR = {
@@ -39,7 +38,7 @@ function TyreDots({ inspectionData }) {
 }
 
 const ReportsHub = () => {
-  const { jobsDb, currentCustomer, currentVehicle, inspectionData, recommendations } = useApp();
+  const { jobsDb, currentCustomer, currentVehicle } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState('all'); // 'all' | 'pending' | 'completed'
 

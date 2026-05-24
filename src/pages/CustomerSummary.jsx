@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppProvider';
 import { Button, Card } from '../components/ui';
 import { User, Car, Clock, RotateCcw, AlertCircle, PlusCircle, CheckCircle2 } from 'lucide-react';
-// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 
 const CustomerSummary = () => {
-  const { currentCustomer, setCurrentVehicle } = useApp();
+  const { currentCustomer, setCurrentVehicle, user, inspectionCompleted } = useApp();
   const navigate = useNavigate();
 
   if (!currentCustomer) {
@@ -22,6 +21,11 @@ const CustomerSummary = () => {
   const startInspection = (vehicle) => {
     setCurrentVehicle(vehicle);
     navigate('/inspection');
+  };
+
+  const viewAdvisory = (vehicle) => {
+    setCurrentVehicle(vehicle);
+    navigate('/recommendation');
   };
 
   return (
@@ -98,17 +102,38 @@ const CustomerSummary = () => {
 
             {currentCustomer.vehicles?.length > 0 ? (
               <div className="space-y-4">
-                {currentCustomer.vehicles.map((v, i) => (
-                  <motion.div initial={{opacity: 0, x: -10}} animate={{opacity: 1, x: 0}} transition={{delay: i * 0.1}} key={i} className="flex flex-col sm:flex-row items-center justify-between p-4 rounded-xl border-2 border-slate-100 bg-slate-50 hover:border-primary-200 transition-colors gap-4">
-                    <div className="w-full sm:w-auto">
-                      <h4 className="font-bold text-lg text-slate-900 tracking-tight">{v.make} {v.model}</h4>
-                      <p className="text-sm text-slate-500 font-medium">{v.year} • {v.fuelType} • {v.odometer} km</p>
-                    </div>
-                    <Button onClick={() => startInspection(v)} className="w-full sm:w-auto whitespace-nowrap">
-                      Start Inspection
-                    </Button>
-                  </motion.div>
-                ))}
+                {currentCustomer.vehicles.map((v, i) => {
+                  const isPOS = user?.role === 'POS Executive';
+                  return (
+                    <motion.div initial={{opacity: 0, x: -10}} animate={{opacity: 1, x: 0}} transition={{delay: i * 0.1}} key={i} className="flex flex-col sm:flex-row items-center justify-between p-4 rounded-xl border-2 border-slate-100 bg-slate-50 hover:border-primary-200 transition-colors gap-4">
+                      <div className="w-full sm:w-auto">
+                        <h4 className="font-bold text-lg text-slate-900 tracking-tight">{v.make} {v.model}</h4>
+                        <p className="text-sm text-slate-500 font-medium">{v.year} • {v.fuelType} • {v.odometer} km</p>
+                      </div>
+                      
+                      {isPOS ? (
+                        inspectionCompleted ? (
+                          <Button onClick={() => viewAdvisory(v)} className="w-full sm:w-auto whitespace-nowrap bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 shadow-md">
+                            View Advisory &amp; Estimate
+                          </Button>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 animate-pulse">
+                              <span>🕐</span> Pending Inspection
+                            </span>
+                            <Button disabled className="w-full sm:w-auto whitespace-nowrap bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed">
+                              Awaiting Tech
+                            </Button>
+                          </div>
+                        )
+                      ) : (
+                        <Button onClick={() => startInspection(v)} className="w-full sm:w-auto whitespace-nowrap">
+                          {inspectionCompleted ? 'View/Edit Inspection' : 'Start Inspection'}
+                        </Button>
+                      )}
+                    </motion.div>
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center p-8 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
