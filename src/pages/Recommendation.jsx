@@ -6,11 +6,15 @@ import { AlertCircle, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Recommendation = () => {
-  const { recommendations, currentCustomer } = useApp();
+  const { recommendations, currentCustomer, saveCurrentReport } = useApp();
   const navigate = useNavigate();
 
   const replaceNow = recommendations.filter(r => r.status === 'replace_now');
   const monitor = recommendations.filter(r => r.status === 'can_run');
+  const handleSaveReport = () => {
+    const savedReport = saveCurrentReport();
+    navigate('/report', { state: { jobSnapshot: savedReport } });
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 mt-4 pb-20">
@@ -78,8 +82,8 @@ const Recommendation = () => {
       </div>
 
       <div className="flex flex-col sm:flex-row justify-center gap-4 mt-12">
-        <Button onClick={() => navigate('/report')} size="lg" className="flex-1 md:flex-none md:min-w-[240px] h-16 text-lg rounded-full shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
-          📄 Download Report
+        <Button onClick={handleSaveReport} size="lg" className="flex-1 md:flex-none md:min-w-[240px] h-16 text-lg rounded-full shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+          📄 Save Report
         </Button>
         <Button onClick={() => navigate('/service-catalog')} size="lg" variant="outline" className="flex-1 md:flex-none md:min-w-[240px] h-16 text-lg rounded-full gap-2 border-2">
           View Catalog &amp; Suggest <ChevronRight className="ml-1 w-5 h-5" />

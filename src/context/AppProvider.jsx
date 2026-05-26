@@ -4,7 +4,15 @@ const AppContext = createContext();
 const SEVEN_DAYS_AGO = '2026-05-17T00:00:00.000Z';
 const CUSTOMERS_STORAGE_KEY = 'abhyaan_customers_db';
 const INSPECTION_LOGS_STORAGE_KEY = 'abhyaan_inspection_logs';
+const SAVED_REPORTS_STORAGE_KEY = 'abhyaan_saved_reports';
+const REWARD_RULES_STORAGE_KEY = 'abhyaan_reward_rules';
 const SESSION_STORAGE_KEY = 'abhyaan_session';
+const DEFAULT_REWARD_RULES = {
+  purchasePoints: 1,
+  purchaseAmount: 100,
+  referralBonus: 500,
+  redemptionValue: 1,
+};
 
 const createInitialInspectionData = () => ({
   tyres: {
@@ -44,6 +52,18 @@ const saveSharedArray = (key, value) => {
   }
 };
 
+const cloneData = (value) => JSON.parse(JSON.stringify(value));
+
+const loadRewardRules = () => {
+  try {
+    const saved = localStorage.getItem(REWARD_RULES_STORAGE_KEY);
+    return saved ? { ...DEFAULT_REWARD_RULES, ...JSON.parse(saved) } : DEFAULT_REWARD_RULES;
+  } catch (e) {
+    console.error("Error loading reward rules from localStorage", e);
+    return DEFAULT_REWARD_RULES;
+  }
+};
+
 // eslint-disable-next-line react-refresh/only-export-components
 export const useApp = () => useContext(AppContext);
 
@@ -71,7 +91,7 @@ export const AppProvider = ({ children }) => {
   const [inspectionData, setInspectionData] = useState(createInitialInspectionData);
   const [recommendations, setRecommendations] = useState([]);
   const [estimate, setEstimate] = useState({ items: [], consent: null, isPaid: false, managerApproved: false });
-  const [jobsDb, setJobsDb] = useState([]);
+  const [jobsDb, setJobsDb] = useState(() => loadStoredArray(SAVED_REPORTS_STORAGE_KEY, []));
   const [activeJobId, setActiveJobId] = useState(null);
   const [inspectionLogs, setInspectionLogs] = useState(() => loadStoredArray(INSPECTION_LOGS_STORAGE_KEY, []));
   const [activeInspectionLogId, setActiveInspectionLogId] = useState(null);
@@ -88,6 +108,10 @@ export const AppProvider = ({ children }) => {
   }, [inspectionLogs]);
 
   useEffect(() => {
+    saveSharedArray(SAVED_REPORTS_STORAGE_KEY, jobsDb);
+  }, [jobsDb]);
+
+  useEffect(() => {
     const handleSharedStorage = (event) => {
       if (!event.newValue) return;
 
@@ -98,6 +122,10 @@ export const AppProvider = ({ children }) => {
 
         if (event.key === INSPECTION_LOGS_STORAGE_KEY) {
           setInspectionLogs(prev => JSON.stringify(prev) === event.newValue ? prev : JSON.parse(event.newValue));
+        }
+
+        if (event.key === SAVED_REPORTS_STORAGE_KEY) {
+          setJobsDb(prev => JSON.stringify(prev) === event.newValue ? prev : JSON.parse(event.newValue));
         }
       } catch (e) {
         console.error("Error syncing shared app data from localStorage", e);
@@ -185,6 +213,7 @@ export const AppProvider = ({ children }) => {
       setInspectionData(createInitialInspectionData());
       setRecommendations([]);
       setEstimate({ items: [], consent: null, isPaid: false, managerApproved: false });
+      setActiveJobId(null);
       setInspectionLogs(prev => [inspectionLog, ...prev]);
       
       // Update persistent DB mock
@@ -229,6 +258,7 @@ export const AppProvider = ({ children }) => {
     setInspectionData(createInitialInspectionData());
     setRecommendations([]);
     setEstimate({ items: [], consent: null, isPaid: false, managerApproved: false });
+    setActiveJobId(null);
     setInspectionLogs(prev => prev.map(item => 
       item.id === logId
         ? { ...item, status: 'in_progress', startedAt: item.startedAt || new Date().toISOString(), technicianName: user?.name || 'Technician' }
@@ -301,10 +331,54 @@ export const AppProvider = ({ children }) => {
     return recs;
   };
 
+  const buildReportRecord = (overrides = {}) => {
+    const reportId = overrides.id || activeJobId || `REP-${Date.now().toString().slice(-6)}`;
+    const reportEstimate = overrides.estimate || estimate;
+
+    return {
+      id: reportId,
+      customerId: currentCustomer?.id || null,
+      customerName: currentCustomer?.name || 'Walk-in',
+      customerMobile: currentCustomer?.mobile || '',
+      vehicleId: currentVehicle?.id || null,
+      vehicle: currentVehicle ? `${currentVehicle.make} ${currentVehicle.model}` : 'Unknown',
+      vehicleYear: currentVehicle?.year || '',
+      vehicleFuelType: currentVehicle?.fuelType || '',
+      vehicleOdometer: currentVehicle?.odometer || '',
+      items: cloneData(reportEstimate.items || []),
+      status: overrides.status || 'Completed',
+      date: overrides.date || new Date().toISOString(),
+      savedAt: new Date().toISOString(),
+      snapshot: {
+        inspectionData: cloneData(inspectionData),
+        recommendations: cloneData(recommendations),
+        estimate: cloneData(reportEstimate),
+      },
+    };
+  };
+
+  const upsertJob = (job) => {
+    setJobsDb(prev => {
+      const existingIndex = prev.findIndex(item => item.id === job.id);
+      if (existingIndex === -1) return [...prev, job];
+
+      return prev.map(item => item.id === job.id ? { ...item, ...job } : item);
+    });
+    setActiveJobId(job.id);
+  };
+
+  const saveCurrentReport = () => {
+    const savedReport = buildReportRecord({ status: 'Completed' });
+    upsertJob(savedReport);
+    return savedReport;
+  };
+
   const completeCheckout = (paymentMode, total) => {
-    setEstimate({ ...estimate, isPaid: true, paymentMode });
+    const paidEstimate = { ...estimate, isPaid: true, paymentMode };
+    setEstimate(paidEstimate);
     if (currentCustomer) {
-      const earnedPoints = Math.floor(total / 100);
+      const rewardRules = loadRewardRules();
+      const earnedPoints = Math.floor(total / rewardRules.purchaseAmount) * rewardRules.purchasePoints;
       const nextVisit = new Date();
       nextVisit.setMonth(nextVisit.getMonth() + 6);
       const updatedCustomer = {
@@ -314,6 +388,15 @@ export const AppProvider = ({ children }) => {
       };
       setCurrentCustomer(updatedCustomer);
       setCustomersDb(prev => prev.map(c => c.id === currentCustomer.id ? updatedCustomer : c));
+    }
+
+    if (activeJobId) {
+      const completedJob = buildReportRecord({
+        id: activeJobId,
+        estimate: paidEstimate,
+        status: 'Completed',
+      });
+      upsertJob(completedJob);
     }
   };
 
@@ -327,18 +410,19 @@ export const AppProvider = ({ children }) => {
       vehicleYear: currentVehicle?.year || '',
       vehicleFuelType: currentVehicle?.fuelType || '',
       vehicleOdometer: currentVehicle?.odometer || '',
-      items: estimate.items,
+      customerId: currentCustomer?.id || null,
+      vehicleId: currentVehicle?.id || null,
+      items: cloneData(estimate.items || []),
       status: 'Pending',
       date: new Date().toISOString(),
       // Full snapshot for report reconstruction
       snapshot: {
-        inspectionData: JSON.parse(JSON.stringify(inspectionData)),
-        recommendations: JSON.parse(JSON.stringify(recommendations)),
-        estimate: JSON.parse(JSON.stringify(estimate)),
+        inspectionData: cloneData(inspectionData),
+        recommendations: cloneData(recommendations),
+        estimate: cloneData(estimate),
       },
     };
-    setJobsDb(prev => [...prev, newJob]);
-    setActiveJobId(newJobId);
+    upsertJob(newJob);
     return newJobId;
   };
 
@@ -357,7 +441,7 @@ export const AppProvider = ({ children }) => {
       inspectionData, setInspectionData,
       recommendations, setRecommendations, generateRecommendations,
       estimate, setEstimate,
-      jobsDb, setJobsDb, activeJobId, setActiveJobId, createJob, updateJobStatus, completeCheckout
+      jobsDb, setJobsDb, activeJobId, setActiveJobId, createJob, updateJobStatus, completeCheckout, saveCurrentReport
     }}>
       {children}
     </AppContext.Provider>

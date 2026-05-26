@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppProvider';
 import { Card } from '../components/ui';
 import {
-  FileText, Eye, Clock, CheckCircle2, AlertTriangle,
+  FileText, Eye, CheckCircle2, AlertTriangle,
   Car, User, Calendar, ArrowRight, ClipboardList,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -48,7 +48,8 @@ const ReportsHub = () => {
            ' · ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const filtered = jobsDb.filter(j =>
+  const savedReports = jobsDb.filter(job => job.status === 'Completed' && job.snapshot);
+  const filtered = savedReports.filter(j =>
     filter === 'all' ? true : j.status.toLowerCase() === filter
   );
 
@@ -122,7 +123,7 @@ const ReportsHub = () => {
           </div>
           <p className="text-slate-700 font-bold text-lg">No reports found</p>
           <p className="text-slate-400 text-sm mt-1 font-medium">
-            Complete a vehicle inspection &amp; billing to generate a report.
+            Save a vehicle inspection report to see it here.
           </p>
         </Card>
       ) : (
