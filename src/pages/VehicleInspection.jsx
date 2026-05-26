@@ -311,13 +311,6 @@ const VehicleInspection = () => {
 
   const handleTyreChange = (pos, field, value) => {
     setInspectionData(prev => {
-      if (field === 'brand') {
-        const updatedTyres = {};
-        Object.keys(prev.tyres).forEach(tp => {
-          updatedTyres[tp] = { ...prev.tyres[tp], brand: value };
-        });
-        return { ...prev, tyres: updatedTyres };
-      }
       return {
         ...prev,
         tyres: { ...prev.tyres, [pos]: { ...prev.tyres[pos], [field]: value } }
@@ -501,7 +494,7 @@ const VehicleInspection = () => {
                     {tyreBrands.map(b => <option key={b} value={b}>{b}</option>)}
                   </select>
                   {inspectionData.tyres[selectedTyre].brand && (
-                    <p className="text-xs text-emerald-600 font-semibold mt-1">✓ Applied to all tyres</p>
+                    <p className="text-xs text-emerald-600 font-semibold mt-1">✓ Applied to this tyre</p>
                   )}
                 </div>
                 <div>
