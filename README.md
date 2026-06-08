@@ -1,72 +1,147 @@
-# Abaahan POS 🚀
+# Abahaan POS
 
-Abaahan POS is a modern, high-end Point of Sale (POS) and Workshop Management system designed specifically for premium automotive service centers. Built with React, Vite, and Tailwind CSS, Abaahan POS streamlines the entire customer journey—from onboarding and vehicle inspection to floor execution and digital reporting—all wrapped in a stunning glassmorphism aesthetic.
+Abahaan POS is a workshop management and point-of-sale application for premium automotive service centers. It covers customer discovery, KYC, vehicle inspection, service recommendations, estimate consent, floor execution, billing, reporting, reminders, loyalty, and customer follow-up workflows.
 
-## 🌟 Key Features & Workflows
+The app is built as a React/Vite frontend with local browser storage by default and optional Supabase-backed data, Edge Functions, email, portal links, report PDF generation, and storage.
 
-- **Premium Customer KYC & Lookup:** Seamlessly register and look up customers instantly using mobile numbers. Includes session-level tracking that automatically stamps and displays a returning customer's **Last Visit** timestamp (date and exact time) under quick search results.
-- **Strict Consent-to-Billing Workflow:** Enforces real-world workshop governance. Estimates require explicit digital consent from the customer before a job can be sent to the floor. The POS Billing terminal remains **locked** until the technician physically marks the job as completed.
-- **Kanban-Style Job Floor Tracker:** A tablet-friendly, real-time dashboard for technicians to manage jobs (Queue ➔ In Bay ➔ Ready). Fully integrated with the billing engine to prevent invoicing without service completion.
-- **Vehicle Inspection & Diagnosis:** An intuitive interface for technicians to perform detailed visual inspections (tyres, battery health, and general conditions) with interactive vehicle visuals.
-- **Intelligent Recommendations:** Automatically generates service recommendations based on inspection data (tread depth, pressure, condition).
-- **Split-Screen Checkout:** Instantly review an itemized estimate alongside the customer consent block.
-- **Scaffolded Payment Gateway (Razorpay):** Integrates checkout processing modes supporting **UPI, Card, NetBanking, and Cash**. Triggers Razorpay Checkout SDK dynamically on execution with prefilled customer details, custom themes, and sandbox error handling.
-- **Digital Reports Hub:** Maintain a history of detailed, printable, and shareable (via WhatsApp/Email) digital inspection reports for every service session.
+## Features
 
-## 🛠️ Tech Stack
+- **Role-based workflows:** Store Manager, POS Executive, and Technician views with different dashboard and action access.
+- **Customer KYC and lookup:** Register customers, attach vehicles, search by mobile number, and track last visits.
+- **Inspection flow:** Capture tyre, battery, odometer, visual condition, and run-rate details.
+- **Smart recommendations:** Generate service suggestions from inspection values such as tread depth, pressure, battery health, and vehicle condition.
+- **Estimate and consent:** Build itemized estimates and dispatch approved jobs to the workshop floor.
+- **Job floor tracker:** Move jobs through Pending, In Progress, and Completed states.
+- **Billing and invoicing:** Collect Cash, UPI, Card, and NetBanking payments and generate invoices after job completion.
+- **Reports and follow-up:** Save digital reports, share via WhatsApp/email flows, manage reminders, review feedback, and track lost opportunities.
+- **Loyalty and analytics:** Configure loyalty rules and review revenue, reminders, repeat customers, and operational metrics.
+- **Supabase-ready backend:** Includes schema, repository modules, Edge Functions, portal token support, email logs, reminders, and report PDF storage.
 
-- **Frontend Framework:** React 18
-- **Build Tool:** Vite
-- **Styling:** Tailwind CSS (Custom glassmorphism themes, dynamic blobs, and modern UI tokens)
+## Tech Stack
+
+- **Frontend:** React 19, Vite 5
+- **Styling:** Tailwind CSS
+- **Routing:** React Router DOM 7
+- **State:** React Context API
+- **Charts:** Recharts
 - **Icons:** Lucide React
 - **Animations:** Framer Motion
-- **State Management:** React Context API (`AppProvider`)
-- **Routing:** React Router DOM
-- **Payment Gateway:** Razorpay Standard Checkout SDK
+- **Backend options:** Local browser storage by default, Supabase when configured
+- **Payments:** Razorpay Standard Checkout SDK
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-Make sure you have [Node.js](https://nodejs.org/) installed on your machine.
+- Node.js
+- npm
 
-### Installation
+### Install
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/suhanranjantripathy/Abaahan-POS.git
-   cd Abaahan-POS
-   ```
+```bash
+npm install
+```
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+### Configure Environment
 
-3. **Run the development server:**
-   ```bash
-   npm run dev
-   ```
+Create a local env file from the example:
 
-4. **Build for production:**
-   ```bash
-   npm run build
-   ```
+```bash
+cp .env.example .env
+```
 
-## 📱 Application Flow
+For local-only development, keep:
 
-1. **Login:** Authenticate as a Store Manager, POS Executive, or Technician. Role-based access ensures users only see what they need.
-2. **Customer Discovery:** Fast mobile-first lookup. Shows previous customer visit histories and redirects to Quick KYC if the customer is new.
-3. **Inspection:** Technicians input tyre tread depths, battery health, and visual conditions.
-4. **Advisory & Estimate:** The system suggests replacements. The Sales Manager generates an estimate.
-5. **Customer Consent:** Customer reviews and approves the estimate. This instantly creates the job on the workshop floor.
-6. **Execution (Job Floor):** Technician claims the job, executes it, and marks it as completed.
-7. **Checkout & Billing:** The POS unlocks. Manager collects payment (UPI/Card/Cash) via mock Razorpay checkout gateway and generates the receipt.
-8. **Reporting:** A digital report is auto-generated containing health gauges, diagrams, and historical data, which can be shared via WhatsApp.
+```bash
+VITE_DATA_BACKEND=local
+```
 
-## 🎨 UI/UX & Visual Highlights
+For Supabase-backed development, configure:
 
-- **Glassmorphism & Dynamic Backgrounds:** Extensive use of `backdrop-blur`, animated gradient orbs, and soft drop shadows for an enterprise-luxury feel.
-- **Symmetric Bird-Eye Car Diagrams:** Precise mathematical coordinates for FL, FR, RL, and RR tyres ensuring perfect left-right alignment and equal outer margins.
-- **Preserved Aspect Ratios:** SVG components use `preserveAspectRatio="xMidYMid meet"` combined with responsive wrappers to guarantee diagrams don't stretch or distort across different viewport widths.
-- **Expanded Battery Health Gauge:** Custom semicircle SVG battery gauges with proper height dimensions (`viewBox="0 0 180 130"`) and visible overflow styling to prevent rendering clips of gauge needles and status text.
+```bash
+VITE_DATA_BACKEND=supabase
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Optional production/service settings:
+
+```bash
+VITE_RAZORPAY_KEY=your-razorpay-key
+VITE_GOOGLE_REVIEW_URL=https://your-review-link
+VITE_EMPLOYEE_AUTH_URL=https://your-auth-endpoint
+VITE_EMAIL_FROM=your-sender@example.com
+```
+
+Supabase Edge Function secrets are not exposed to Vite. Configure them in Supabase:
+
+```bash
+EMAIL_PROVIDER=resend|postmark
+EMAIL_FROM=your-sender@example.com
+RESEND_API_KEY=your-resend-key
+POSTMARK_SERVER_TOKEN=your-postmark-token
+PORTAL_TOKEN_SECRET=long-random-secret
+APP_ORIGIN=https://your-app-origin
+```
+
+### Run
+
+```bash
+npm run dev
+```
+
+### Build
+
+```bash
+npm run build
+```
+
+### Lint
+
+```bash
+npm run lint
+```
+
+## Supabase Setup
+
+The Supabase assets live in `supabase/`.
+
+- Run `supabase/schema.sql` for a new project.
+- Run `supabase/new_features_migration.sql` when applying only portal tokens, reminders, email logs, and report PDF storage to an existing base schema.
+- Deploy the Edge Functions in `supabase/functions/`:
+  - `send-email`
+  - `create-employee`
+  - `create-portal-link`
+  - `resolve-portal-token`
+  - `generate-report-pdf`
+
+The schema enables RLS and tenant policies around each shop. Make sure authenticated users have a matching profile row in `public.users` with a valid `shop_id`.
+
+## Application Flow
+
+1. Login as a Store Manager, POS Executive, or Technician.
+2. Search or register a customer and attach vehicle details.
+3. Create or start an inspection request.
+4. Record diagnostic tyre, battery, and usage data.
+5. Review generated recommendations and build an estimate.
+6. Capture customer consent and dispatch the job to the workshop floor.
+7. Technician moves the job through the floor tracker and marks it completed.
+8. Billing unlocks after completion, payment is collected, and invoice/report flows become available.
+9. Follow-up reminders, feedback, loyalty, and lost-opportunity tracking support post-service operations.
+
+## Production Notes
+
+- Razorpay Checkout is integrated on the frontend, but server-side payment signature verification is still required before trusting successful payments in production.
+- `VITE_DATA_BACKEND=api` has a fetch wrapper scaffold, but custom API repositories are not fully implemented yet. Use `local` or `supabase` unless you add the API repository layer.
+- Browser `mailto:` fallback cannot force the sender address. Use the Supabase `send-email` function with a configured provider for production email.
+- Supabase report PDFs use the public `reports` bucket from the migration. Switch to signed URLs if reports must be private.
+- Vite may warn about large production chunks. The app builds successfully, but route-level/manual chunk optimization can improve initial load performance.
+
+## Useful Files
+
+- `src/context/AppProvider.jsx` - central app state, workflow actions, and local persistence.
+- `src/config/appConfig.js` - environment-backed app constants and default service catalog.
+- `src/services/` - Supabase/API/client-side service boundaries.
+- `src/pages/` - route-level app screens.
+- `supabase/schema.sql` - full Supabase schema and RLS setup.
+- `BACKEND_MIGRATION.md` - backend migration notes and remaining backend direction.

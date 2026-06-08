@@ -1,7 +1,12 @@
 import React, { useId, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useData, useWorkflow } from '../context/AppProvider';
 import { Button } from '../components/ui';
+import { APP_BRAND, EXTERNAL_SERVICES } from '../config/appConfig';
+import { emailService } from '../services/emailService';
+import { pdfService } from '../services/pdfService';
+import { portalService } from '../services/portalService';
+import { toast } from '../components/toast';
 import {
   Download, Share2, CheckCircle2, AlertTriangle,
   Battery, Gauge, ArrowLeft, Zap, Phone, Mail,
@@ -31,6 +36,113 @@ function pressureStatus(psi) {
   if (v > 36)             return { label: 'High',  color: '#f97316' };
   return { label: 'Low',  color: '#ef4444' };
 }
+
+const pdfSafe = (value) => String(value ?? '')
+  .replace(/[–—]/g, '-')
+  .replace(/[“”]/g, '"')
+  .replace(/[‘’]/g, "'")
+  .split('')
+  .filter((char) => {
+    const code = char.charCodeAt(0);
+    return code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 126);
+  })
+  .join('');
+
+const escapePdfText = (value) => pdfSafe(value).replace(/[\\()]/g, '\\$&');
+
+const wrapPdfLine = (text, maxChars = 88) => {
+  const words = pdfSafe(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  words.forEach(word => {
+    if ((line + ' ' + word).trim().length > maxChars) {
+      if (line) lines.push(line);
+      line = word;
+    } else {
+      line = `${line} ${word}`.trim();
+    }
+  });
+  if (line) lines.push(line);
+  return lines.length ? lines : [''];
+};
+
+const createTextPdfBlob = ({ title, lines }) => {
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const margin = 48;
+  const lineHeight = 15;
+  const contentWidthChars = 88;
+  const pages = [[]];
+
+  const pushLine = (line = '') => {
+    const current = pages[pages.length - 1];
+    if (current.length >= 48) pages.push([]);
+    pages[pages.length - 1].push(line);
+  };
+
+  lines.forEach(line => {
+    if (line === '') {
+      pushLine('');
+      return;
+    }
+    wrapPdfLine(line, contentWidthChars).forEach(pushLine);
+  });
+
+  const objects = [];
+  const addObject = (body) => {
+    objects.push(body);
+    return objects.length;
+  };
+
+  const catalogId = 1;
+  const pagesId = 2;
+  const fontId = 3;
+  objects.push('');
+  objects.push('');
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+
+  const pageIds = [];
+  pages.forEach((pageLines, pageIndex) => {
+    const streamLines = [
+      'BT',
+      '/F1 18 Tf',
+      `${margin} ${pageHeight - margin} Td`,
+      `(${escapePdfText(pageIndex === 0 ? title : `${title} (continued)`)}) Tj`,
+      '/F1 10 Tf',
+      `0 -${lineHeight + 10} Td`,
+    ];
+
+    pageLines.forEach(line => {
+      streamLines.push(`(${escapePdfText(line)}) Tj`);
+      streamLines.push(`0 -${lineHeight} Td`);
+    });
+    streamLines.push('ET');
+
+    const stream = streamLines.join('\n');
+    const contentId = addObject(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    pageIds.push(pageId);
+  });
+
+  objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += '0000000000 65535 f \n';
+  offsets.slice(1).forEach(offset => {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  return new Blob([pdf], { type: 'application/pdf' });
+};
 
 // ─── Mini bird-eye SVG for the report ────────────────────────────────────────
 function ReportCarDiagram({ inspectionData }) {
@@ -218,7 +330,7 @@ function TyreRow({ pos, data, label }) {
       <div style={{ flex:1 }}>
         <p style={{ margin:0, fontWeight:700, fontSize:13, color:'#1e293b' }}>{label}</p>
         <p style={{ margin:'2px 0 0', fontSize:11, color:'#64748b' }}>
-          {data?.brand || '—'} {data?.size ? `· ${data.size}` : ''}
+          {data?.brand || '—'} {data?.size ? `· ${data.size}` : ''} {data?.fitmentType ? `· ${data.fitmentType === 'oe' ? 'OE Fitment' : 'Replacement'}` : ''}
         </p>
       </div>
 
@@ -247,19 +359,22 @@ function TyreRow({ pos, data, label }) {
 const DigitalReport = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const liveContext = useApp();
+  const workflowContext = useWorkflow();
+  const dataContext = useData();
+  const liveContext = { ...workflowContext, ...dataContext };
   
   // If navigated from Reports Hub, use the snapshot. Otherwise use live session.
   const isHistoric = !!location.state?.jobSnapshot;
   const snapshot = location.state?.jobSnapshot?.snapshot;
   const jobRecord = location.state?.jobSnapshot;
 
-  const currentCustomer = isHistoric ? { name: jobRecord.customerName, mobile: jobRecord.customerMobile } : liveContext.currentCustomer;
+  const currentCustomer = isHistoric ? { ...(snapshot?.customer || {}), name: jobRecord.customerName, mobile: jobRecord.customerMobile } : liveContext.currentCustomer;
   const currentVehicle = isHistoric ? { make: jobRecord.vehicle.split(' ')[0], model: jobRecord.vehicle.split(' ').slice(1).join(' '), year: jobRecord.vehicleYear, fuelType: jobRecord.vehicleFuelType, odometer: jobRecord.vehicleOdometer } : liveContext.currentVehicle;
   
   const inspectionData = isHistoric ? snapshot?.inspectionData : liveContext.inspectionData;
   const recommendations = isHistoric ? snapshot?.recommendations || [] : liveContext.recommendations;
   const estimate = isHistoric ? snapshot?.estimate : liveContext.estimate;
+  const portalLink = estimate?.portalLink || snapshot?.portalLink || jobRecord?.portalLink || '';
 
   const reportRef = useRef(null);
   const liveReportId = useId();
@@ -276,17 +391,121 @@ const DigitalReport = () => {
     FL:'Front Left', FR:'Front Right', RL:'Rear Left', RR:'Rear Right', Spare:'Spare'
   };
 
-  const handleDownload = () => {
-    window.print();
+  const ensurePortalLink = async () => {
+    if (portalLink) return portalLink;
+    try {
+      const portal = await portalService.createLink({
+        customerId: currentCustomer?.id || jobRecord?.customerId || snapshot?.customerId,
+        customerMobile: currentCustomer?.mobile || jobRecord?.customerMobile,
+        jobId: jobRecord?.id,
+      });
+      return portal.portalUrl;
+    } catch (e) {
+      console.error('Unable to create secure portal link', e);
+      return '';
+    }
   };
 
-  const handleShare = () => {
+  const downloadLocalPdf = (effectivePortalLink = portalLink) => {
+    const vehicleLabel = currentVehicle
+      ? `${currentVehicle.make} ${currentVehicle.model} (${currentVehicle.year || 'N/A'})`
+      : 'Unknown vehicle';
+    const subtotal = (estimate?.items || []).reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 1)), 0);
+    const pdfLines = [
+      `${APP_BRAND.posName} - Vehicle Health Report`,
+      `Report ID: ${reportId}`,
+      `Date: ${date} ${time}`,
+      '',
+      'Customer',
+      `Name: ${currentCustomer?.name || 'Walk-in'}`,
+      `Mobile: ${currentCustomer?.mobile || 'N/A'}`,
+      `Email: ${currentCustomer?.email || 'N/A'}`,
+      '',
+      'Vehicle',
+      `Vehicle: ${vehicleLabel}`,
+      `Fuel Type: ${currentVehicle?.fuelType || 'N/A'}`,
+      `Odometer: ${currentVehicle?.odometer || 'N/A'} km`,
+      '',
+      'Battery',
+      `Status: ${inspectionData?.battery?.health || 'N/A'}`,
+      `Brand: ${inspectionData?.battery?.brand || 'N/A'}`,
+      `Model: ${inspectionData?.battery?.model || 'N/A'}`,
+      `Health: ${inspectionData?.battery?.healthPercentage || 'N/A'}%`,
+      `Charging: ${inspectionData?.battery?.chargingStatus?.replaceAll('_', ' ') || 'N/A'}`,
+      `Age: ${inspectionData?.battery?.age || 'N/A'} months`,
+      '',
+      'Usage',
+      `Monthly Run: ${inspectionData?.usage?.monthlyKm || 'N/A'} km`,
+      `Driving Style: ${inspectionData?.usage?.drivingStyle || 'N/A'}`,
+      `Terrain: ${inspectionData?.usage?.terrain || 'N/A'}`,
+      '',
+      'Tyre Inspection',
+      ...['FL', 'FR', 'RL', 'RR', 'Spare'].map(pos => {
+        const tyre = inspectionData?.tyres?.[pos] || {};
+        const condition = COND_COLOR[tyre.condition]?.label || tyre.condition || 'N/A';
+        const fitment = tyre.fitmentType === 'oe' ? 'OE Fitment' : tyre.fitmentType === 'replacement' ? 'Replacement' : 'N/A';
+        return `${pos}: ${tyre.brand || 'N/A'} ${tyre.size || ''} | ${tyre.tread || 'N/A'}mm | ${tyre.pressure || 'N/A'} PSI | ${condition} | ${fitment}`;
+      }),
+      '',
+      'Recommendations',
+      ...(recommendations.length
+        ? recommendations.map(rec => `${rec.status === 'replace_now' ? 'Replace Now' : 'Monitor'}: ${rec.text}${rec.runText ? ` | ${rec.runText}` : ''}${rec.recheckDate ? ` | Recheck ${new Date(rec.recheckDate).toLocaleDateString('en-IN')}` : ''}`)
+        : ['No specific recommendations.']),
+      '',
+      'Services & Products',
+      ...(estimate?.items?.length
+        ? estimate.items.map(item => `${item.name} x${item.qty || 1} - Rs.${((item.price || 0) * (item.qty || 1)).toLocaleString('en-IN')}`)
+        : ['No billed items attached.']),
+      `Subtotal: Rs.${subtotal.toLocaleString('en-IN')}`,
+      '',
+      'Warranty Records',
+      ...((estimate?.warranties || []).length
+        ? estimate.warranties.map(warranty => `${warranty.itemName} | Serial: ${warranty.serialNumber || 'N/A'} | ${warranty.warranty || 'Warranty'}${warranty.warrantyEnd ? ` | Valid until ${new Date(warranty.warrantyEnd).toLocaleDateString('en-IN')}` : ''}`)
+        : ['No warranty records attached.']),
+      '',
+      effectivePortalLink ? `Customer Portal: ${effectivePortalLink}` : '',
+      '',
+      'This PDF was generated by the POS application from the saved inspection data.',
+    ].filter(line => line !== null && line !== undefined);
+
+    const blob = createTextPdfBlob({
+      title: `${APP_BRAND.posName} Vehicle Health Report`,
+      lines: pdfLines,
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${pdfSafe(reportId || 'vehicle-report').replace(/\s+/g, '-')}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownload = async () => {
+    const effectivePortalLink = await ensurePortalLink();
+    try {
+      const generated = await pdfService.generate({ jobId: jobRecord?.id, report: jobRecord });
+      if (generated?.pdfUrl) {
+        window.open(generated.pdfUrl, '_blank');
+        toast.success('Generated PDF is ready.');
+        return;
+      }
+    } catch (e) {
+      console.error('Backend PDF generation failed, using local PDF fallback', e);
+    }
+    downloadLocalPdf(effectivePortalLink);
+  };
+
+  const handleShare = async () => {
+    const effectivePortalLink = await ensurePortalLink();
     const name = currentCustomer?.name || 'Customer';
     const mobile = currentCustomer?.mobile || '';
     const vehicle = currentVehicle ? `${currentVehicle.make} ${currentVehicle.model} (${currentVehicle.year})` : 'your vehicle';
     const msg = encodeURIComponent(
-      `Hi ${name}! 🚗 Your Vehicle Health Report from Abahaan is ready.\n` +
+      `Hi ${name}! 🚗 Your Vehicle Health Report from ${APP_BRAND.name} is ready.\n` +
       `Vehicle: ${vehicle}\nReport ID: ${reportId}\nDate: ${date}\n\n` +
+      `${effectivePortalLink ? `Customer portal: ${effectivePortalLink}\n\n` : ''}` +
       `Thank you for visiting us. Drive safe! 🙏`
     );
     const waUrl = mobile
@@ -295,6 +514,26 @@ const DigitalReport = () => {
     window.open(waUrl, '_blank');
     setSharing(true);
     setTimeout(() => setSharing(false), 3000);
+  };
+
+  const handleEmail = async () => {
+    const effectivePortalLink = await ensurePortalLink();
+    const subject = `Vehicle Health Report ${reportId}`;
+    const body =
+      `Hi ${currentCustomer?.name || 'Customer'},\n\nYour vehicle health report is ready.\n\nReport ID: ${reportId}\n${effectivePortalLink ? `Customer portal: ${effectivePortalLink}\n` : ''}\nRegards,\n${APP_BRAND.posName}`;
+    try {
+      await emailService.send({
+        to: currentCustomer?.email || '',
+        subject,
+        text: body,
+        html: body.replaceAll('\n', '<br />'),
+        customerId: currentCustomer?.id || jobRecord?.customerId || snapshot?.customerId,
+        jobId: jobRecord?.id,
+      });
+      toast.success('Email sent/opened.');
+    } catch (e) {
+      toast.error(e.message || 'Could not send email.');
+    }
   };
 
   // ── Styles (inline so they survive print) ──
@@ -378,6 +617,12 @@ const DigitalReport = () => {
             <Share2 size={16}/>
             {sharing ? 'Sent ✓' : 'Send WhatsApp'}
           </Button>
+          <Button onClick={handleEmail} variant="secondary" className="gap-2" size="lg">
+            Email Report
+          </Button>
+          <span className="self-center text-xs font-bold text-slate-400 hidden lg:inline">
+            From: {EXTERNAL_SERVICES.emailFrom}
+          </span>
           <Button onClick={handleDownload} className="gap-2" size="lg">
             <Download size={16}/> Download PDF
           </Button>
@@ -390,7 +635,7 @@ const DigitalReport = () => {
         {/* Header bar */}
         <div style={S.topBar}>
           <div>
-            <div style={S.brandName}>Abahaan</div>
+            <div style={S.brandName}>{APP_BRAND.name}</div>
             <div style={S.brandSub}>VEHICLE INSPECTION & SERVICE POS</div>
           </div>
           <div style={S.repId}>
@@ -482,9 +727,14 @@ const DigitalReport = () => {
                 }}>
                   {[
                     { label: 'Status', value: inspectionData?.battery?.health === 'good' ? '✅ Good' : inspectionData?.battery?.health === 'weak' ? '⚠️ Weak' : '🔴 Replace' },
+                    { label: 'Brand', value: inspectionData?.battery?.brand || 'N/A' },
+                    { label: 'Model', value: inspectionData?.battery?.model || 'N/A' },
+                    { label: 'Health %', value: inspectionData?.battery?.healthPercentage ? `${inspectionData.battery.healthPercentage}%` : 'N/A' },
+                    { label: 'Charging', value: inspectionData?.battery?.chargingStatus ? inspectionData.battery.chargingStatus.replaceAll('_', ' ') : 'N/A' },
                     { label: 'Age', value: inspectionData?.battery?.age ? `${inspectionData.battery.age} months` : 'N/A' },
                     { label: 'Fuel Type', value: currentVehicle?.fuelType || '—' },
                     { label: 'Drive Style', value: inspectionData?.usage?.drivingStyle === 'aggressive' ? 'Highway' : inspectionData?.usage?.drivingStyle === 'commercial' ? 'Commercial' : 'City (Normal)' },
+                    { label: 'Terrain', value: inspectionData?.usage?.terrain ? inspectionData.usage.terrain.replaceAll('_', ' ') : 'N/A' },
                     { label: 'Monthly Run', value: inspectionData?.usage?.monthlyKm ? `${inspectionData.usage.monthlyKm} km` : 'N/A' },
                   ].map((item, i) => (
                     <div key={i} style={{
@@ -574,17 +824,22 @@ const DigitalReport = () => {
               <div style={{ fontSize:10, color:'#94a3b8', marginTop:4 }}>
                 You will receive a WhatsApp reminder when your vehicle is due for service.
               </div>
+              {portalLink && (
+                <div style={{ fontSize:10, color:'#2563eb', marginTop:4, fontWeight:700, wordBreak:'break-all' }}>
+                  Portal: {portalLink}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Footer */}
           <div style={{ marginTop:36, paddingTop:16, borderTop:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <div style={{ fontSize:10, color:'#94a3b8' }}>
-              <div style={{ fontWeight:700, color:'#475569', marginBottom:2 }}>Abahaan Vehicle Inspection POS</div>
+              <div style={{ fontWeight:700, color:'#475569', marginBottom:2 }}>{APP_BRAND.name} Vehicle Inspection POS</div>
               <div>This report is auto-generated based on in-person inspection. Report ID: {reportId}</div>
             </div>
             <div style={{ textAlign:'right', fontSize:10, color:'#94a3b8' }}>
-              <div>Powered by Abahaan Systems</div>
+              <div>Powered by {APP_BRAND.name} Systems</div>
               <div style={{ fontWeight:700, color:'#2563eb' }}>abahaan.in</div>
             </div>
           </div>

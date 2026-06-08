@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useData, useWorkflow } from '../context/AppProvider';
 import { Card } from '../components/ui';
 import {
   FileText, Eye, CheckCircle2, AlertTriangle,
@@ -38,9 +38,10 @@ function TyreDots({ inspectionData }) {
 }
 
 const ReportsHub = () => {
-  const { jobsDb, currentCustomer, currentVehicle } = useApp();
+  const { jobsDb } = useData();
+  const { currentCustomer, currentVehicle } = useWorkflow();
   const navigate = useNavigate();
-  const [filter, setFilter] = useState('all'); // 'all' | 'pending' | 'completed'
+  const [filter, setFilter] = useState('all');
 
   const fmt = (iso) => {
     const d = new Date(iso);
@@ -48,9 +49,9 @@ const ReportsHub = () => {
            ' · ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const savedReports = jobsDb.filter(job => job.status === 'Completed' && job.snapshot);
+  const savedReports = jobsDb.filter(job => job.snapshot);
   const filtered = savedReports.filter(j =>
-    filter === 'all' ? true : j.status.toLowerCase() === filter
+    filter === 'all' ? true : j.status.toLowerCase().replaceAll(' ', '_') === filter
   );
 
   const hasLiveSession = !!(currentCustomer || currentVehicle);
@@ -96,7 +97,7 @@ const ReportsHub = () => {
       {/* Filter tabs + count */}
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
-          {['all', 'pending', 'completed'].map(f => (
+          {['all', 'pending', 'pending_reminder', 'lost_opportunity', 'completed'].map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -106,7 +107,7 @@ const ReportsHub = () => {
                   : 'bg-white text-slate-500 border border-slate-200 hover:border-primary-300'
               }`}
             >
-              {f}
+              {f.replaceAll('_', ' ')}
             </button>
           ))}
         </div>

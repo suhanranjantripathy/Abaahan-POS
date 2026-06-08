@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useData, useWorkflow } from '../context/AppProvider';
 import { Button, Input, Card } from '../components/ui';
 import { Search, Phone, ArrowRight, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -9,9 +9,10 @@ const CustomerLookup = () => {
   const [mobile, setMobile] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { lookupCustomer, customersDb, selectCustomer } = useApp();
+  const { lookupCustomer, selectCustomer } = useWorkflow();
+  const { customersDb } = useData();
 
-  const handleLookup = (e) => {
+  const handleLookup = async (e) => {
     e.preventDefault();
     if (!/^\d{10}$/.test(mobile)) {
       setError('Enter a valid 10-digit mobile number');
@@ -21,7 +22,7 @@ const CustomerLookup = () => {
 
     const customer = lookupCustomer(mobile);
     if (customer) {
-      selectCustomer(customer);
+      await selectCustomer(customer);
       navigate('/summary');
     } else {
       // Pass the mobile number to the next screen using routing state
@@ -100,8 +101,8 @@ const CustomerLookup = () => {
                 <motion.button 
                   initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + (i * 0.1) }}
                   key={c.id || i}
-                  onClick={() => {
-                     selectCustomer(c);
+                  onClick={async () => {
+                     await selectCustomer(c);
                      navigate('/summary');
                   }}
                   className="w-full text-left bg-white/60 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-slate-100 hover:border-primary-300 hover:shadow-lg hover:bg-white transition-all duration-300 flex justify-between items-center group"

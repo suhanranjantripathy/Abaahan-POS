@@ -1,13 +1,23 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useAuth, useData, useWorkflow } from '../context/AppProvider';
 import { Button, Card } from '../components/ui';
 import { User, Car, Clock, RotateCcw, AlertCircle, PlusCircle, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const CustomerSummary = () => {
-  const { currentCustomer, setCurrentVehicle, user, inspectionCompleted } = useApp();
+  const { currentCustomer, setCurrentVehicle, inspectionCompleted, startInspectionForVehicle } = useWorkflow();
+  const { jobsDb } = useData();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('vehicles');
+
+  const customerJobs = useMemo(() => jobsDb.filter(job =>
+    currentCustomer && (
+      String(job.customerId || job.snapshot?.customerId) === String(currentCustomer.id) ||
+      job.customerMobile === currentCustomer.mobile
+    )
+  ), [currentCustomer, jobsDb]);
 
   if (!currentCustomer) {
     return (
@@ -18,15 +28,23 @@ const CustomerSummary = () => {
     );
   }
 
-  const startInspection = (vehicle) => {
-    setCurrentVehicle(vehicle);
-    navigate('/inspection');
+  const startInspection = async (vehicle) => {
+    const started = await startInspectionForVehicle(vehicle);
+    if (started) navigate('/inspection');
   };
 
   const viewAdvisory = (vehicle) => {
     setCurrentVehicle(vehicle);
     navigate('/recommendation');
   };
+
+  const warranties = customerJobs.flatMap(job =>
+    (job.snapshot?.estimate?.warranties || []).map(warranty => ({ ...warranty, jobId: job.id }))
+  );
+
+  const pendingRecommendations = customerJobs
+    .flatMap(job => (job.snapshot?.recommendations || []).map(rec => ({ ...rec, jobId: job.id })))
+    .filter(rec => rec.status === 'replace_now' || rec.recheckDate);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -91,6 +109,28 @@ const CustomerSummary = () => {
         {/* Right Column: Vehicles and History */}
         <div className="md:col-span-2 space-y-6">
           <Card className="p-6">
+            <div className="flex gap-2 mb-6 overflow-x-auto">
+              {[
+                ['vehicles', 'Vehicles'],
+                ['inspections', 'Past Inspections'],
+                ['purchases', 'Purchase History'],
+                ['warranty', 'Warranty'],
+                ['recommendations', 'Pending Recommendations'],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`px-3 py-2 rounded-xl text-xs font-black whitespace-nowrap ${
+                    activeTab === id ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === 'vehicles' && (
+              <>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold flex items-center gap-2 tracking-tight">
                 <Car className="text-primary-600" /> Registered Vehicles
@@ -141,6 +181,52 @@ const CustomerSummary = () => {
                 <Button onClick={() => navigate('/vehicle-details')} variant="secondary">Add Vehicle Now</Button>
               </div>
             )}
+              </>
+            )}
+
+            {activeTab === 'inspections' && (
+              <HistoryList
+                empty="No inspection history yet."
+                items={customerJobs.filter(job => job.snapshot?.inspectionData).map(job => ({
+                  title: `${job.vehicle} · ${job.status}`,
+                  meta: new Date(job.date || job.savedAt).toLocaleString('en-IN'),
+                  action: () => navigate('/report', { state: { jobSnapshot: job } }),
+                }))}
+              />
+            )}
+
+            {activeTab === 'purchases' && (
+              <HistoryList
+                empty="No purchases yet."
+                items={customerJobs.filter(job => job.snapshot?.estimate?.isPaid).flatMap(job =>
+                  (job.snapshot?.estimate?.items || []).map(item => ({
+                    title: `${item.name} x${item.qty}`,
+                    meta: `${job.id} · ₹${((item.price || 0) * (item.qty || 1)).toLocaleString('en-IN')}`,
+                    action: () => navigate('/invoice'),
+                  }))
+                )}
+              />
+            )}
+
+            {activeTab === 'warranty' && (
+              <HistoryList
+                empty="No warranty records yet."
+                items={warranties.map(warranty => ({
+                  title: warranty.itemName,
+                  meta: `Serial ${warranty.serialNumber || 'N/A'} · ${warranty.warrantyEnd ? `Valid until ${new Date(warranty.warrantyEnd).toLocaleDateString('en-IN')}` : warranty.warranty}`,
+                }))}
+              />
+            )}
+
+            {activeTab === 'recommendations' && (
+              <HistoryList
+                empty="No pending recommendations."
+                items={pendingRecommendations.map(rec => ({
+                  title: rec.text,
+                  meta: rec.recheckDate ? `Recheck ${new Date(rec.recheckDate).toLocaleDateString('en-IN')}` : 'Immediate action',
+                }))}
+              />
+            )}
           </Card>
 
           <Card className="p-6">
@@ -160,5 +246,31 @@ const CustomerSummary = () => {
     </div>
   );
 };
+
+function HistoryList({ items, empty }) {
+  if (!items.length) {
+    return (
+      <div className="text-center p-8 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
+        <p className="text-slate-500 font-medium">{empty}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((item, index) => (
+        <button
+          key={`${item.title}-${index}`}
+          onClick={item.action}
+          disabled={!item.action}
+          className="w-full text-left rounded-xl border border-slate-100 bg-slate-50 p-4 hover:border-primary-200 disabled:hover:border-slate-100"
+        >
+          <p className="font-black text-slate-900">{item.title}</p>
+          <p className="text-sm font-semibold text-slate-500 mt-1">{item.meta}</p>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default CustomerSummary;

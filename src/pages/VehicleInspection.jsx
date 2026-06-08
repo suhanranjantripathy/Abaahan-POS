@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useWorkflow } from '../context/AppProvider';
 import { Button, Input } from '../components/ui';
+import { toast } from '../components/toast';
 import {
-  CheckCircle2, AlertTriangle, Battery, Gauge, ArrowRight, Zap, X
+  CheckCircle2, AlertTriangle, Battery, Gauge, ArrowRight, Zap, X, Lock
 } from 'lucide-react';
 
 // ─── Vehicle silhouette classifier ──────────────────────────────────────────
@@ -298,18 +299,31 @@ const COND_META = {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 const VehicleInspection = () => {
-  const { inspectionData, setInspectionData, currentVehicle, generateRecommendations, setInspectionCompleted, completeInspectionLog } = useApp();
+  const {
+    inspectionData,
+    setInspectionData,
+    currentVehicle,
+    generateRecommendations,
+    setInspectionCompleted,
+    completeInspectionLog,
+    isCurrentInspectionLocked,
+    validateInspectionData,
+  } = useWorkflow();
   const navigate = useNavigate();
 
   const [selectedTyre, setSelectedTyre] = useState(null); // null | 'FL'|'FR'|'RL'|'RR'|'Spare'
   const [showBattery, setShowBattery] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
+  const [validationErrors, setValidationErrors] = useState([]);
 
   const profile = useMemo(() => getProfile(currentVehicle?.model), [currentVehicle?.model]);
+  const isLocked = isCurrentInspectionLocked();
 
   const tyreBrands = ['CEAT', 'MRF', 'Apollo', 'Bridgestone', 'Michelin', 'Goodyear',
                       'JK Tyre', 'Yokohama', 'Continental', 'Pirelli', 'Other'];
 
   const handleTyreChange = (pos, field, value) => {
+    if (isLocked) return;
     setInspectionData(prev => {
       return {
         ...prev,
@@ -319,20 +333,43 @@ const VehicleInspection = () => {
   };
 
   const handleBatteryChange = (field, value) => {
+    if (isLocked) return;
     setInspectionData(prev => ({ ...prev, battery: { ...prev.battery, [field]: value } }));
   };
 
-  const completeInspection = () => {
-    generateRecommendations();
-    setInspectionCompleted(true);
-    completeInspectionLog();
-    navigate('/recommendation');
+  const completeInspection = async () => {
+    if (isLocked) {
+      toast.info('This inspection has already been submitted and is locked.');
+      navigate('/recommendation');
+      return;
+    }
+
+    const validation = validateInspectionData();
+    if (!validation.valid) {
+      setValidationErrors(validation.errors);
+      toast.error(`Complete required inspection fields first (${validation.errors.length} sections need attention).`);
+      return;
+    }
+
+    setIsFinishing(true);
+    try {
+      generateRecommendations();
+      const completed = await completeInspectionLog();
+      if (!completed) {
+        toast.error('Could not close this inspection. Please start it from the dashboard queue and try again.');
+        return;
+      }
+      setInspectionCompleted(true);
+      navigate('/recommendation');
+    } finally {
+      setIsFinishing(false);
+    }
   };
 
   // Tyre completeness badge
   const tyreComplete = (pos) => {
     const t = inspectionData.tyres[pos];
-    return t.pressure && t.tread;
+    return t.brand && t.size && t.pressure && t.tread && t.condition && t.fitmentType;
   };
 
   const conditions = [
@@ -355,10 +392,27 @@ const VehicleInspection = () => {
             <span className="text-xs uppercase tracking-widest text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full ml-1 font-bold">{profile}</span>
           </p>
         </div>
-        <Button onClick={completeInspection} size="lg">
-          Finish Review <ArrowRight className="ml-2 w-5 h-5" />
+        <Button onClick={completeInspection} size="lg" disabled={isFinishing || isLocked}>
+          {isLocked ? 'Submitted & Locked' : isFinishing ? 'Finishing...' : 'Finish Review'}
+          {isLocked ? <Lock className="ml-2 w-5 h-5" /> : <ArrowRight className="ml-2 w-5 h-5" />}
         </Button>
       </div>
+
+      {isLocked && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 flex items-center gap-2">
+          <Lock size={16} /> Inspection submitted. Fields are read-only to protect the customer record.
+        </div>
+      )}
+
+      {validationErrors.length > 0 && !isLocked && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p className="font-black mb-2">Complete these required sections:</p>
+          <div className="grid md:grid-cols-2 gap-1">
+            {validationErrors.slice(0, 8).map(error => <p key={error} className="font-semibold">• {error}</p>)}
+          </div>
+          {validationErrors.length > 8 && <p className="font-semibold mt-1">• {validationErrors.length - 8} more sections</p>}
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col md:flex-row gap-4 overflow-hidden">
         {/* ── Left: Bird-eye diagram + battery btn ── */}
@@ -488,6 +542,7 @@ const VehicleInspection = () => {
                   <select
                     className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
                     value={inspectionData.tyres[selectedTyre].brand}
+                    disabled={isLocked}
                     onChange={(e) => handleTyreChange(selectedTyre, 'brand', e.target.value)}
                   >
                     <option value="">Select Brand</option>
@@ -503,8 +558,32 @@ const VehicleInspection = () => {
                     className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
                     placeholder="e.g. 215/60 R16"
                     value={inspectionData.tyres[selectedTyre].size}
+                    disabled={isLocked}
                     onChange={(e) => handleTyreChange(selectedTyre, 'size', e.target.value)}
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Fitment Type</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: 'oe', label: 'OE Fitment' },
+                    { id: 'replacement', label: 'Replacement' },
+                  ].map(option => (
+                    <button
+                      key={option.id}
+                      disabled={isLocked}
+                      onClick={() => handleTyreChange(selectedTyre, 'fitmentType', option.id)}
+                      className={`h-11 rounded-xl border-2 font-bold transition-colors disabled:opacity-60 ${
+                        inspectionData.tyres[selectedTyre].fitmentType === option.id
+                          ? 'border-primary-600 bg-primary-50 text-primary-700'
+                          : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -517,6 +596,7 @@ const VehicleInspection = () => {
                     className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
                     placeholder="e.g. 32"
                     value={inspectionData.tyres[selectedTyre].pressure}
+                    disabled={isLocked}
                     onChange={(e) => handleTyreChange(selectedTyre, 'pressure', e.target.value)}
                   />
                 </div>
@@ -530,6 +610,7 @@ const VehicleInspection = () => {
                       className="flex h-11 w-full rounded-xl border border-slate-300 bg-white pl-9 pr-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
                       placeholder="e.g. 4.5"
                       value={inspectionData.tyres[selectedTyre].tread}
+                      disabled={isLocked}
                       onChange={(e) => handleTyreChange(selectedTyre, 'tread', e.target.value)}
                     />
                   </div>
@@ -545,6 +626,7 @@ const VehicleInspection = () => {
                   {conditions.map(c => (
                     <button
                       key={c.id}
+                      disabled={isLocked}
                       onClick={() => handleTyreChange(selectedTyre, 'condition', c.id)}
                       className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all font-bold text-sm tracking-tight ${
                         inspectionData.tyres[selectedTyre].condition === c.id
@@ -564,7 +646,7 @@ const VehicleInspection = () => {
                 <p className="text-sm text-slate-400 font-medium">
                   {tyreComplete(selectedTyre)
                     ? <span className="text-emerald-600 font-bold">✓ This tyre is complete</span>
-                    : 'Fill pressure & tread depth to mark complete'}
+                    : 'Fill all required tyre fields to mark complete'}
                 </p>
                 {/* Next tyre shortcut */}
                 {(() => {
@@ -614,11 +696,32 @@ const VehicleInspection = () => {
 
               <div className="grid sm:grid-cols-2 gap-5">
                 <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Battery Brand</label>
+                  <input
+                    className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
+                    placeholder="e.g. Amaron"
+                    value={inspectionData.battery.brand}
+                    disabled={isLocked}
+                    onChange={e => handleBatteryChange('brand', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Battery Model</label>
+                  <input
+                    className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
+                    placeholder="e.g. AAM-FL-545106036"
+                    value={inspectionData.battery.model}
+                    disabled={isLocked}
+                    onChange={e => handleBatteryChange('model', e.target.value)}
+                  />
+                </div>
+                <div>
                   <label className="text-sm font-semibold text-slate-700 block mb-2">Overall Health</label>
                   <div className="flex gap-3">
                     {['good', 'weak', 'replace'].map(h => (
                       <button
                         key={h}
+                        disabled={isLocked}
                         onClick={() => handleBatteryChange('health', h)}
                         className={`flex-1 py-3 px-3 rounded-xl border-2 font-bold capitalize transition-colors text-sm ${
                           inspectionData.battery.health === h
@@ -640,8 +743,37 @@ const VehicleInspection = () => {
                     className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
                     placeholder="e.g. 24"
                     value={inspectionData.battery.age}
+                    disabled={isLocked}
                     onChange={e => handleBatteryChange('age', e.target.value)}
                   />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Health Percentage</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
+                    placeholder="e.g. 82"
+                    value={inspectionData.battery.healthPercentage}
+                    disabled={isLocked}
+                    onChange={e => handleBatteryChange('healthPercentage', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Charging Status</label>
+                  <select
+                    className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
+                    value={inspectionData.battery.chargingStatus}
+                    disabled={isLocked}
+                    onChange={e => handleBatteryChange('chargingStatus', e.target.value)}
+                  >
+                    <option value="">Select Status</option>
+                    <option value="charging_normal">Charging Normal</option>
+                    <option value="undercharging">Undercharging</option>
+                    <option value="overcharging">Overcharging</option>
+                    <option value="not_charging">Not Charging</option>
+                  </select>
                 </div>
               </div>
 
@@ -657,6 +789,7 @@ const VehicleInspection = () => {
                       className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
                       placeholder="e.g. 1500"
                       value={inspectionData.usage.monthlyKm}
+                      disabled={isLocked}
                       onChange={e => setInspectionData(p => ({ ...p, usage: { ...p.usage, monthlyKm: e.target.value } }))}
                     />
                   </div>
@@ -665,11 +798,27 @@ const VehicleInspection = () => {
                     <select
                       className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
                       value={inspectionData.usage.drivingStyle}
+                      disabled={isLocked}
                       onChange={e => setInspectionData(p => ({ ...p, usage: { ...p.usage, drivingStyle: e.target.value } }))}
                     >
                       <option value="normal">City Commute (Normal)</option>
                       <option value="aggressive">Highway / Aggressive</option>
                       <option value="commercial">Commercial / Cab</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Terrain</label>
+                    <select
+                      className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
+                      value={inspectionData.usage.terrain}
+                      disabled={isLocked}
+                      onChange={e => setInspectionData(p => ({ ...p, usage: { ...p.usage, terrain: e.target.value } }))}
+                    >
+                      <option value="">Select Terrain</option>
+                      <option value="city">City</option>
+                      <option value="highway">Highway</option>
+                      <option value="rough">Rough</option>
+                      <option value="mixed">Mixed</option>
                     </select>
                   </div>
                 </div>

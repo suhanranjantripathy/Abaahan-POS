@@ -1,19 +1,26 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useAuth, useWorkflow } from '../context/AppProvider';
 import { Button, Card } from '../components/ui';
 import { AlertCircle, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Recommendation = () => {
-  const { recommendations, currentCustomer, saveCurrentReport } = useApp();
+  const { recommendations, currentCustomer, saveCurrentReport } = useWorkflow();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const [savingReport, setSavingReport] = React.useState(false);
 
   const replaceNow = recommendations.filter(r => r.status === 'replace_now');
   const monitor = recommendations.filter(r => r.status === 'can_run');
-  const handleSaveReport = () => {
-    const savedReport = saveCurrentReport();
-    navigate('/report', { state: { jobSnapshot: savedReport } });
+  const handleSaveReport = async () => {
+    setSavingReport(true);
+    try {
+      const savedReport = await saveCurrentReport();
+      navigate('/report', { state: { jobSnapshot: savedReport } });
+    } finally {
+      setSavingReport(false);
+    }
   };
 
   return (
@@ -41,6 +48,11 @@ const Recommendation = () => {
                     <div>
                       <p className="font-bold text-slate-900 text-lg tracking-tight">{item.text}</p>
                       {item.pos && <p className="text-sm font-semibold text-red-600 uppercase tracking-widest mt-1">Position: {item.pos}</p>}
+                      {item.remainingKm !== undefined && (
+                        <p className="text-xs font-bold text-slate-500 mt-1">
+                          NSD {item.nsd || 'N/A'}mm · Remaining life approx {item.remainingKm.toLocaleString('en-IN')} km · Recheck {new Date(item.recheckDate).toLocaleDateString('en-IN')}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                        <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">Critical</span>
@@ -68,6 +80,11 @@ const Recommendation = () => {
                     <div>
                       <p className="font-bold text-slate-900 text-lg tracking-tight">{item.text}</p>
                       {item.runText && <p className="text-sm font-semibold text-emerald-600 mt-1 flex items-center gap-1"><Zap size={14}/> Safe for {item.runText}</p>}
+                      {item.remainingKm !== undefined && (
+                        <p className="text-xs font-bold text-slate-500 mt-1">
+                          NSD {item.nsd || 'N/A'}mm · Recheck {new Date(item.recheckDate).toLocaleDateString('en-IN')}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -82,12 +99,14 @@ const Recommendation = () => {
       </div>
 
       <div className="flex flex-col sm:flex-row justify-center gap-4 mt-12">
-        <Button onClick={handleSaveReport} size="lg" className="flex-1 md:flex-none md:min-w-[240px] h-16 text-lg rounded-full shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
-          📄 Save Report
+        <Button onClick={handleSaveReport} disabled={savingReport} size="lg" className="flex-1 md:flex-none md:min-w-[240px] h-16 text-lg rounded-full shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+          📄 {savingReport ? 'Saving Report...' : 'Save Report'}
         </Button>
-        <Button onClick={() => navigate('/service-catalog')} size="lg" variant="outline" className="flex-1 md:flex-none md:min-w-[240px] h-16 text-lg rounded-full gap-2 border-2">
-          View Catalog &amp; Suggest <ChevronRight className="ml-1 w-5 h-5" />
-        </Button>
+        {user?.role === 'POS Executive' && (
+          <Button onClick={() => navigate('/service-catalog')} size="lg" variant="outline" className="flex-1 md:flex-none md:min-w-[240px] h-16 text-lg rounded-full gap-2 border-2">
+            View Catalog &amp; Suggest <ChevronRight className="ml-1 w-5 h-5" />
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -1,12 +1,15 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useAuth, useWorkflow } from '../context/AppProvider';
+import { APP_BRAND } from '../config/appConfig';
 import { Button, Card } from '../components/ui';
 import { MessageCircle, FileDown, CheckCircle, ChevronRight, Calculator, Lock, Unlock } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toast } from '../components/toast';
 
 const EstimateBuilder = () => {
-  const { estimate, setEstimate, currentCustomer, user } = useApp();
+  const { estimate, setEstimate, currentCustomer } = useWorkflow();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const cart = estimate.items || [];
@@ -15,7 +18,14 @@ const EstimateBuilder = () => {
   const total = subtotal + taxes;
 
   const handleShare = () => {
-    alert("Mock: Estimate shared via WhatsApp to " + currentCustomer?.mobile);
+    if (!currentCustomer?.mobile) {
+      toast.error("Customer mobile number is missing.");
+      return;
+    }
+    const text = `Hi ${currentCustomer.name},\nHere is the estimate for your vehicle.\nTotal Amount: ₹${total.toFixed(2)}\n\nPlease review it with your service advisor at the center.\n- ${APP_BRAND.posName}`;
+    const url = `https://wa.me/91${currentCustomer.mobile}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+    toast.success("Opening WhatsApp...");
   };
 
   return (
@@ -110,9 +120,13 @@ const EstimateBuilder = () => {
                    <Lock className="w-5 h-5 mr-2" /> Waiting for Manager...
                  </Button>
                )
-            ) : (
+            ) : user?.role === 'POS Executive' ? (
                <Button size="lg" className="flex-1 rounded-full shadow-xl" onClick={() => navigate('/pos')}>
                  Proceed to Consent <ChevronRight className="ml-2 w-5 h-5" />
+               </Button>
+            ) : (
+               <Button size="lg" disabled className="flex-1 rounded-full shadow-xl opacity-70 cursor-not-allowed">
+                 <Lock className="w-5 h-5 mr-2" /> Approved. POS Executive continues.
                </Button>
             )}
          </div>

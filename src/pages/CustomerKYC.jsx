@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useWorkflow } from '../context/AppProvider';
 import { Button, Input, Card } from '../components/ui';
 import { UserPlus, ShieldCheck, ArrowRight, Car } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 const CustomerKYC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { addCustomer } = useApp();
+  const { addCustomer } = useWorkflow();
 
   const initialMobile = location.state?.mobile || '';
 
@@ -23,6 +23,7 @@ const CustomerKYC = () => {
   });
 
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
 
   const validate = () => {
     let tempErrors = {};
@@ -35,11 +36,18 @@ const CustomerKYC = () => {
     return Object.keys(tempErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (validate()) {
-      addCustomer(formData);
-      navigate('/vehicle-details');
+      setSaving(true);
+      try {
+        await addCustomer(formData);
+        navigate('/vehicle-details');
+      } catch (error) {
+        alert("Error saving customer: " + (error.message || JSON.stringify(error)));
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -171,8 +179,8 @@ const CustomerKYC = () => {
                </div>
             </motion.div>
 
-            <Button type="submit" size="lg" className="w-full h-16 text-xl rounded-2xl bg-slate-900 hover:bg-slate-800 shadow-xl shadow-slate-900/20 group">
-              Create Profile & Add Vehicle
+            <Button type="submit" size="lg" disabled={saving} className="w-full h-16 text-xl rounded-2xl bg-slate-900 hover:bg-slate-800 shadow-xl shadow-slate-900/20 group">
+              {saving ? 'Creating Profile...' : 'Create Profile & Add Vehicle'}
               <ArrowRight className="ml-3 group-hover:translate-x-1 transition-transform" />
             </Button>
           </form>

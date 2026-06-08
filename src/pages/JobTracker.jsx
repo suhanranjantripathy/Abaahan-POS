@@ -1,11 +1,12 @@
 import React from 'react';
-import { useApp } from '../context/AppProvider';
+import { useData, useAuth } from '../context/AppProvider';
 import { Card, Button } from '../components/ui';
 import { Wrench, CheckCircle, Play, Clock, Car, MoreVertical } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const JobTracker = () => {
-  const { jobsDb, updateJobStatus, user } = useApp();
+  const { jobsDb, updateJobStatus, updateJobItemStatus, assignJobTechnician } = useData();
+  const { user } = useAuth();
 
   const pendingJobs = jobsDb.filter(j => j.status === 'Pending');
   const inProgressJobs = jobsDb.filter(j => j.status === 'In Progress');
@@ -36,12 +37,40 @@ const JobTracker = () => {
         </div>
         
         <div className="bg-slate-50 rounded-xl p-3 mb-4 border border-slate-100 ml-2">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Service Line Items</p>
-          <ul className="space-y-1.5 text-sm font-semibold text-slate-700">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Service Line Items</p>
+            <button
+              onClick={() => assignJobTechnician(job.id, user?.name || 'Technician')}
+              className="text-[10px] font-black text-primary-700 bg-primary-50 border border-primary-100 rounded-full px-2 py-1"
+            >
+              Assign Me
+            </button>
+          </div>
+          {job.assignedTechnician && (
+            <p className="mb-2 text-xs font-bold text-slate-500">Technician: {job.assignedTechnician}</p>
+          )}
+          <ul className="space-y-2 text-sm font-semibold text-slate-700">
             {job.items?.map((item, i) => (
-               <li key={i} className="flex justify-between">
-                 <span>{item.name}</span>
-                 <span className="text-slate-400">x{item.qty}</span>
+               <li key={item.lineId || i} className="rounded-lg bg-white border border-slate-100 p-2">
+                 <div className="flex justify-between gap-2">
+                   <span>{item.name}</span>
+                   <span className="text-slate-400">x{item.qty}</span>
+                 </div>
+                 <div className="mt-2 flex flex-wrap items-center gap-2">
+                   {['Pending', 'In Progress', 'Completed'].map(status => (
+                     <button
+                       key={status}
+                       onClick={() => updateJobItemStatus(job.id, item.lineId, status)}
+                       className={`px-2 py-1 rounded-md text-[10px] font-black uppercase ${
+                         item.status === status
+                           ? status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : status === 'In Progress' ? 'bg-primary-100 text-primary-700' : 'bg-amber-100 text-amber-700'
+                           : 'bg-slate-100 text-slate-400'
+                       }`}
+                     >
+                       {status}
+                     </button>
+                   ))}
+                 </div>
                </li>
             ))}
           </ul>

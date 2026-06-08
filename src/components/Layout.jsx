@@ -1,10 +1,11 @@
 import React from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
-import { Home, Users, Wrench, FileText, ChevronLeft, LogOut, Star } from 'lucide-react';
+import { useAuth } from '../context/AppProvider';
+import { APP_BRAND } from '../config/appConfig';
+import { Home, Users, Wrench, FileText, ChevronLeft, LogOut, Star, Settings, PieChart, Bell, FileX, UserCog } from 'lucide-react';
 
 const Layout = () => {
-  const { user, logout } = useApp();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -27,7 +28,12 @@ const Layout = () => {
       case '/pos': return 'Billing & POS';
       case '/reports-hub': return 'Reports Hub';
       case '/report': return 'Digital Report';
-      case '/loyalty': return 'Loyalty & Reports';
+      case '/loyalty': return 'Loyalty Rules';
+      case '/admin': return 'Catalog Admin';
+      case '/employees': return 'Employees';
+      case '/analytics': return 'Analytics & Trends';
+      case '/reminders': return 'Reminders';
+      case '/lost-opportunities': return 'Lost Opportunities';
       default: return 'Auto Service POS';
     }
   };
@@ -44,7 +50,7 @@ const Layout = () => {
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 shrink-0 shadow-sm z-10 relative">
         <div className={`h-1 w-full ${roleColor}`}></div>
         <div className="h-16 flex items-center px-6 border-b border-slate-100 font-bold text-xl text-primary-700 tracking-tight flex-shrink-0">
-          Abahaan POS
+          {APP_BRAND.posName}
         </div>
         <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
           <NavItem to="/" icon={<Home size={20} />} label="Dashboard" current={location.pathname === '/'} />
@@ -52,9 +58,20 @@ const Layout = () => {
             <NavItem to="/lookup" icon={<Users size={20} />} label="Customers" current={location.pathname === '/lookup'} />
           )}
           <NavItem to="/jobs" icon={<Wrench size={20} />} label="Job Floor" current={location.pathname === '/jobs'} />
+          {user?.role !== 'Technician' && (
+            <>
+              <NavItem to="/reminders" icon={<Bell size={20} />} label="Reminders" current={location.pathname === '/reminders'} />
+              <NavItem to="/lost-opportunities" icon={<FileX size={20} />} label="Lost Sales" current={location.pathname === '/lost-opportunities'} />
+            </>
+          )}
           <NavItem to="/reports-hub" icon={<FileText size={20} />} label="Reports" current={location.pathname === '/reports-hub' || location.pathname === '/report'} />
           {user?.role === 'Store Manager' && (
-             <NavItem to="/loyalty" icon={<Star size={20} />} label="Settings & Loyalty" current={location.pathname === '/loyalty'} />
+             <>
+               <NavItem to="/analytics" icon={<PieChart size={20} />} label="Analytics" current={location.pathname === '/analytics'} />
+               <NavItem to="/employees" icon={<UserCog size={20} />} label="Employees" current={location.pathname === '/employees'} />
+               <NavItem to="/loyalty" icon={<Star size={20} />} label="Loyalty Rules" current={location.pathname === '/loyalty'} />
+               <NavItem to="/admin" icon={<Settings size={20} />} label="Catalog Admin" current={location.pathname === '/admin'} />
+             </>
           )}
         </div>
         <div className="p-4 border-t border-slate-100 mt-auto flex-shrink-0">
@@ -90,7 +107,7 @@ const Layout = () => {
                 <ChevronLeft size={24} />
               </button>
             ) : (
-                <div className="md:hidden font-bold text-xl text-primary-700 tracking-tight">Abahaan</div>
+                <div className="md:hidden font-bold text-xl text-primary-700 tracking-tight">{APP_BRAND.name}</div>
             )}
             <h1 className="text-lg font-bold text-slate-900 tracking-tight">{getPageTitle()}</h1>
           </div>
@@ -115,6 +132,9 @@ const Layout = () => {
            <MobileNavItem to="/lookup" icon={<Users size={22} />} label="Customer" current={location.pathname === '/lookup'} navigate={navigate} />
         )}
         <MobileNavItem to="/jobs" icon={<Wrench size={22} />} label="Jobs" current={location.pathname === '/jobs'} navigate={navigate} />
+        {user?.role !== 'Technician' && (
+          <MobileNavItem to="/reminders" icon={<Bell size={22} />} label="Remind" current={location.pathname === '/reminders'} navigate={navigate} />
+        )}
         <MobileNavItem to="/reports-hub" icon={<FileText size={22} />} label="Reports" current={location.pathname === '/reports-hub' || location.pathname === '/report'} navigate={navigate} />
       </nav>
     </div>

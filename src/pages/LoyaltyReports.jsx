@@ -1,32 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { Card, Button, Input } from '../components/ui';
-import { useApp } from '../context/AppProvider';
-import { BarChart3, Users, Gift, TrendingUp, ShieldCheck, Save, X } from 'lucide-react';
+import { useData } from '../context/AppProvider';
+import { DEFAULT_REWARD_RULES } from '../config/appConfig';
+import { BarChart3, Users, Gift, TrendingUp, ShieldCheck, Save, X, Handshake } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-const REWARD_RULES_STORAGE_KEY = 'abhyaan_reward_rules';
-const DEFAULT_REWARD_RULES = {
-  purchasePoints: 1,
-  purchaseAmount: 100,
-  referralBonus: 500,
-  redemptionValue: 1,
-};
 
 const formatCurrency = (value) => `₹${Math.round(value || 0).toLocaleString('en-IN')}`;
 
 const getEstimateTotal = (estimate) => {
   const subtotal = (estimate?.items || []).reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 0)), 0);
   return subtotal + subtotal * 0.18;
-};
-
-const loadRewardRules = () => {
-  try {
-    const saved = localStorage.getItem(REWARD_RULES_STORAGE_KEY);
-    return saved ? { ...DEFAULT_REWARD_RULES, ...JSON.parse(saved) } : DEFAULT_REWARD_RULES;
-  } catch (e) {
-    console.error('Error loading reward rules', e);
-    return DEFAULT_REWARD_RULES;
-  }
 };
 
 const metricCards = [
@@ -37,8 +20,8 @@ const metricCards = [
 ];
 
 const LoyaltyReports = () => {
-  const { jobsDb, customersDb } = useApp();
-  const [rules, setRules] = useState(loadRewardRules);
+  const { jobsDb, customersDb, rewardRules, saveRewardRules } = useData();
+  const rules = rewardRules || DEFAULT_REWARD_RULES;
   const [draftRules, setDraftRules] = useState(rules);
   const [editingRules, setEditingRules] = useState(false);
 
@@ -103,17 +86,27 @@ const LoyaltyReports = () => {
     { stage: 'Paid Bills', count: analytics.paid, pct: analytics.inspections ? `${Math.round((analytics.paid / analytics.inspections) * 100)}%` : '0%', w: analytics.inspections ? `${Math.round((analytics.paid / analytics.inspections) * 100)}%` : '0%', bg: 'bg-emerald-200' },
   ];
 
-  const saveRules = () => {
+  const influencerStats = useMemo(() => {
+    const referredCustomers = customersDb.filter(customer => customer.referralCode || customer.referredBy);
+    const payoutValue = referredCustomers.length * (rules.referralBonus || 0);
+    return {
+      partners: new Set(referredCustomers.map(customer => customer.referredBy || customer.referralCode)).size,
+      referrals: referredCustomers.length,
+      payoutValue,
+    };
+  }, [customersDb, rules.referralBonus]);
+
+  const saveRules = async () => {
     const normalized = {
+      id: rules.id,
       purchasePoints: Math.max(1, Number(draftRules.purchasePoints) || DEFAULT_REWARD_RULES.purchasePoints),
       purchaseAmount: Math.max(1, Number(draftRules.purchaseAmount) || DEFAULT_REWARD_RULES.purchaseAmount),
       referralBonus: Math.max(0, Number(draftRules.referralBonus) || 0),
       redemptionValue: Math.max(1, Number(draftRules.redemptionValue) || DEFAULT_REWARD_RULES.redemptionValue),
     };
 
-    setRules(normalized);
-    setDraftRules(normalized);
-    localStorage.setItem(REWARD_RULES_STORAGE_KEY, JSON.stringify(normalized));
+    const savedRules = await saveRewardRules(normalized);
+    setDraftRules(savedRules);
     setEditingRules(false);
   };
 
@@ -200,7 +193,7 @@ const LoyaltyReports = () => {
                 </Button>
               </div>
             ) : (
-              <Button size="sm" onClick={() => setEditingRules(true)} className="bg-amber-600 hover:bg-amber-700 text-white rounded-full">Edit Rules</Button>
+              <Button size="sm" onClick={() => { setDraftRules(rules); setEditingRules(true); }} className="bg-amber-600 hover:bg-amber-700 text-white rounded-full">Edit Rules</Button>
             )}
           </div>
 
@@ -237,6 +230,29 @@ const LoyaltyReports = () => {
           </div>
         </Card>
       </div>
+
+      <Card className="p-8 border-slate-100 shadow-lg rounded-2xl bg-white">
+        <h3 className="text-xl font-bold flex items-center gap-2 tracking-tight mb-6">
+          <Handshake className="text-indigo-600" /> Influencer & Referral Dashboard
+        </h3>
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="rounded-2xl bg-indigo-50 border border-indigo-100 p-5">
+            <p className="text-xs font-black text-indigo-500 uppercase tracking-widest">Active Partners</p>
+            <p className="text-3xl font-black text-slate-900 mt-1">{influencerStats.partners}</p>
+          </div>
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-5">
+            <p className="text-xs font-black text-emerald-500 uppercase tracking-widest">Referrals</p>
+            <p className="text-3xl font-black text-slate-900 mt-1">{influencerStats.referrals}</p>
+          </div>
+          <div className="rounded-2xl bg-amber-50 border border-amber-100 p-5">
+            <p className="text-xs font-black text-amber-500 uppercase tracking-widest">Estimated Payout</p>
+            <p className="text-3xl font-black text-slate-900 mt-1">{formatCurrency(influencerStats.payoutValue)}</p>
+          </div>
+        </div>
+        <p className="text-sm font-semibold text-slate-500 mt-4">
+          Referral codes are read from customer records when available; backend payout approval can be attached to the same reward rules.
+        </p>
+      </Card>
     </div>
   );
 };

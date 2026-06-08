@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useAuth, useWorkflow } from '../context/AppProvider';
 import { Button, Input, Card } from '../components/ui';
 import { Car, Fuel, Calendar, Gauge } from 'lucide-react';
 
 const VehicleDetails = () => {
-  const { addVehicle, currentCustomer, user } = useApp();
+  const { addVehicle, currentCustomer } = useWorkflow();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [vehicle, setVehicle] = useState({
@@ -15,6 +16,7 @@ const VehicleDetails = () => {
     fuelType: 'Petrol',
     odometer: ''
   });
+  const [saving, setSaving] = useState(false);
 
   const fuelOptions = ['Petrol', 'Diesel', 'CNG', 'EV', 'Hybrid'];
   const brandOptions = [
@@ -41,12 +43,17 @@ const VehicleDetails = () => {
     'Other': ['Other Model']
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!vehicle.make || !vehicle.model) return;
-    
-    addVehicle(vehicle);
-    navigate(user?.role === 'POS Executive' ? '/summary' : '/inspection');
+
+    setSaving(true);
+    try {
+      await addVehicle(vehicle);
+      navigate(user?.role === 'POS Executive' ? '/summary' : '/inspection');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -145,8 +152,8 @@ const VehicleDetails = () => {
              <p className="text-sm text-slate-600 font-medium">Entering accurate odometer reading helps in generating predictive maintenance reminders for the customer.</p>
           </div>
 
-          <Button type="submit" size="lg" className="w-full">
-            {user?.role === 'POS Executive' ? 'Save & Queue Inspection' : 'Save & Start Inspection'}
+          <Button type="submit" size="lg" disabled={saving} className="w-full">
+            {saving ? 'Saving Vehicle...' : user?.role === 'POS Executive' ? 'Save & Queue Inspection' : 'Save & Start Inspection'}
           </Button>
         </form>
       </Card>

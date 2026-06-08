@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useWorkflow, useData } from '../context/AppProvider';
 import { Button, Card } from '../components/ui';
-import { CheckCircle2, ShieldAlert, CreditCard, Banknote, Landmark, Smartphone, ReceiptText, Lock, Clock } from 'lucide-react';
+import { APP_BRAND, EXTERNAL_SERVICES } from '../config/appConfig';
+import { CheckCircle2, ShieldAlert, CreditCard, Banknote, Landmark, Smartphone, ReceiptText, Lock, Clock, Star, CalendarClock, FileX, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toast } from '../components/toast';
 
 // Utility to load Razorpay script dynamically
 const loadRazorpayScript = () => {
@@ -13,7 +15,7 @@ const loadRazorpayScript = () => {
       return;
     }
     const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.src = EXTERNAL_SERVICES.razorpayScriptUrl;
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
     document.body.appendChild(script);
@@ -21,15 +23,33 @@ const loadRazorpayScript = () => {
 };
 
 const BillingPOS = () => {
-  const { estimate, setEstimate, completeCheckout, createJob, activeJobId, jobsDb, currentCustomer } = useApp();
+  const { estimate, setEstimate, completeCheckout, activeJobId, currentCustomer, recordCustomerDecision } = useWorkflow();
+  const { jobsDb, rewardRules } = useData();
   const navigate = useNavigate();
   const [consentGiven, setConsentGiven] = useState(estimate.consent || false);
   const [paymentMode, setPaymentMode] = useState('');
+  const [decisionMode, setDecisionMode] = useState(null);
+  const [decisionRemarks, setDecisionRemarks] = useState(estimate.decisionRemarks || '');
+  const [reminderDate, setReminderDate] = useState(estimate.reminderDate || '');
+  const [decisionSaving, setDecisionSaving] = useState(false);
+  const [serialDetails, setSerialDetails] = useState(estimate.serialDetails || {});
 
-  const cart = estimate.items || [];
+  const [loyaltyApplied, setLoyaltyApplied] = useState(estimate.loyaltyApplied || 0);
+
+  const cart = useMemo(
+    () => (estimate.approvedItems?.length ? estimate.approvedItems : estimate.items || []),
+    [estimate.approvedItems, estimate.items]
+  );
+  const warrantyItems = useMemo(
+    () => cart.filter(item => item.warranty || /tyre|battery/i.test(item.name || '')),
+    [cart]
+  );
   const subtotal = cart.reduce((acc, current) => acc + (current.price * current.qty), 0);
-  const taxes = subtotal * 0.18;
-  const total = subtotal + taxes;
+  const discount = loyaltyApplied * (rewardRules?.pointValue || 1);
+  const taxableAmount = Math.max(0, subtotal - discount);
+  const cgst = taxableAmount * 0.09;
+  const sgst = taxableAmount * 0.09;
+  const total = taxableAmount + cgst + sgst;
 
   const activeJob = jobsDb.find(j => j.id === activeJobId);
   const isJobCompleted = activeJob?.status === 'Completed';
@@ -39,50 +59,124 @@ const BillingPOS = () => {
     loadRazorpayScript();
   }, []);
 
-  const handleConsent = (c) => {
-    setConsentGiven(c);
-    setEstimate({ ...estimate, consent: c });
-    if (c && !activeJobId) {
-      createJob(); // Send to Job Floor instantly upon consent
+  const handleConsent = async (c) => {
+    if (!c) return;
+
+    setDecisionSaving(true);
+    try {
+      await recordCustomerDecision({ decision: 'approved', loyaltyApplied });
+      setConsentGiven(true);
+      toast.success('Customer approval recorded. Job sent to floor.');
+    } catch (e) {
+      console.error('Error recording approval', e);
+      toast.error('Could not record customer approval.');
+    } finally {
+      setDecisionSaving(false);
     }
   };
 
-  const processSuccess = () => {
-    completeCheckout(paymentMode, total);
-    alert("Payment successful! Auto-Reminder set for 6 months. Feedback & Review link has been SMS'd to the customer.");
-    navigate('/report'); // Auto gen report after checkout
+  const handleNonApproval = async (decision) => {
+    if (decision === 'wants_time' && !reminderDate) {
+      toast.error('Choose a reminder date before saving.');
+      return;
+    }
+
+    setDecisionSaving(true);
+    try {
+      await recordCustomerDecision({
+        decision,
+        remarks: decisionRemarks,
+        reminderDate,
+        loyaltyApplied,
+      });
+      toast.success(decision === 'wants_time' ? 'Reminder scheduled.' : 'Lost opportunity recorded.');
+      navigate('/');
+    } catch (e) {
+      console.error('Error recording customer decision', e);
+      toast.error('Could not save the customer decision.');
+    } finally {
+      setDecisionSaving(false);
+    }
+  };
+
+  const handleSerialChange = (itemId, index, value) => {
+    const next = {
+      ...serialDetails,
+      [itemId]: [
+        ...(serialDetails[itemId] || []),
+      ],
+    };
+    next[itemId][index] = value;
+    setSerialDetails(next);
+    setEstimate({ ...estimate, serialDetails: next });
+  };
+
+  const serialsComplete = warrantyItems.every(item =>
+    Array.from({ length: item.qty || 1 }).every((_, index) => serialDetails[item.id]?.[index]?.trim())
+  );
+
+  const buildWarrantyRecords = () => {
+    const invoiceDate = new Date().toISOString();
+    return warrantyItems.flatMap(item =>
+      Array.from({ length: item.qty || 1 }).map((_, index) => {
+        const years = Number.parseInt(String(item.warranty || '').match(/\d+/)?.[0] || '0', 10);
+        const end = years ? new Date(invoiceDate) : null;
+        if (end) end.setFullYear(end.getFullYear() + years);
+        return {
+          itemId: item.id,
+          itemName: item.name,
+          serialNumber: serialDetails[item.id]?.[index] || '',
+          warranty: item.warranty || 'Standard Warranty',
+          warrantyStart: invoiceDate,
+          warrantyEnd: end ? end.toISOString() : '',
+        };
+      })
+    );
+  };
+
+  const processSuccess = async () => {
+    await completeCheckout(paymentMode, total, loyaltyApplied, {
+      serialDetails,
+      warranties: buildWarrantyRecords(),
+    });
+    toast.success("Payment complete! Generating Tax Invoice...");
+    setTimeout(() => navigate('/invoice'), 800);
   };
 
   const handleCheckout = async () => {
     if (!paymentMode || !isJobCompleted) return;
+    if (!serialsComplete) {
+      toast.error('Capture serial numbers for all warranty-backed products before billing.');
+      return;
+    }
 
     // If Cash is selected, bypass digital payment gateway
     if (paymentMode === 'Cash') {
-      processSuccess();
+      await processSuccess();
       return;
     }
 
     // Scaffolding Razorpay for UPI, Card, NetBank
     const res = await loadRazorpayScript();
-    
+
     if (!res) {
-      alert("Razorpay SDK failed to load. Are you online?");
+      toast.error("Payment gateway offline. Please check your internet connection or use Cash mode.");
       return;
     }
 
     // Options for Razorpay Integration
     const options = {
-      key: "rzp_test_YOUR_KEY_HERE", // TODO: Replace with environment variable
+      key: EXTERNAL_SERVICES.razorpayKey,
       amount: Math.round(total * 100), // Razorpay expects amount in paise
       currency: "INR",
-      name: "Abaahan POS",
+      name: APP_BRAND.posName,
       description: `Payment for Job ${activeJobId}`,
-      image: "https://your-domain.com/logo.png",
-      // order_id: "order_9A33XWu170gUtm", // TODO: Fetch from backend Order API
+      image: `${window.location.origin}/logo.png`,
+      // order_id: fetched from your backend Order API before opening checkout
       handler: function (response) {
-        // Successful payment callback
-        console.log("Razorpay Payment ID:", response.razorpay_payment_id);
-        // TODO: Verify signature on backend here
+        // TODO: Send response to a Supabase Edge Function to verify HMAC-SHA256 signature
+        // before calling processSuccess() to prevent client-side payment bypass.
+        toast.info(`Payment ID: ${response.razorpay_payment_id} — Verifying...`);
         processSuccess();
       },
       prefill: {
@@ -95,10 +189,15 @@ const BillingPOS = () => {
       },
     };
 
+    if (!EXTERNAL_SERVICES.razorpayKey) {
+      toast.warning("Razorpay key not configured. Use Cash mode or add VITE_RAZORPAY_KEY to your .env.local");
+      return;
+    }
+
     const paymentObject = new window.Razorpay(options);
     
-    paymentObject.on('payment.failed', function (response){
-        alert(`Payment Failed! Reason: ${response.error.description}`);
+    paymentObject.on('payment.failed', function (response) {
+      toast.error(`Payment failed: ${response.error.description}`);
     });
 
     paymentObject.open();
@@ -146,9 +245,21 @@ const BillingPOS = () => {
                  <span>Subtotal</span>
                  <span>₹{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                </div>
+               
+               {discount > 0 && (
+                 <div className="flex justify-between text-emerald-600 font-bold">
+                   <span>Loyalty Discount ({loyaltyApplied} pts)</span>
+                   <span>- ₹{discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                 </div>
+               )}
+
                <div className="flex justify-between text-slate-600 font-medium">
-                 <span>GST (18%)</span>
-                 <span>₹{taxes.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                 <span>CGST (9%)</span>
+                 <span>₹{cgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+               </div>
+               <div className="flex justify-between text-slate-600 font-medium">
+                 <span>SGST (9%)</span>
+                 <span>₹{sgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                </div>
                <div className="w-full h-px bg-slate-200 my-2"></div>
                <div className="flex justify-between text-xl font-black text-primary-700">
@@ -173,17 +284,81 @@ const BillingPOS = () => {
              
              {!consentGiven ? (
                <div className="space-y-8 z-10 relative mt-8">
+                 {currentCustomer?.loyalty > 0 && loyaltyApplied === 0 && (
+                   <motion.div initial={{opacity:0, y: 10}} animate={{opacity:1, y: 0}} className="bg-gradient-to-r from-purple-500 to-indigo-500 p-1 rounded-2xl shadow-lg">
+                     <div className="bg-white rounded-xl p-5 flex justify-between items-center">
+                       <div>
+                         <p className="font-bold text-purple-900 flex items-center gap-2">
+                           <Star size={20} className="text-amber-500 fill-amber-500" /> Loyalty Points Available
+                         </p>
+                         <p className="text-sm font-medium text-slate-500 mt-1">
+                           {currentCustomer.loyalty} points = <span className="text-emerald-600 font-bold">₹{currentCustomer.loyalty * (rewardRules?.pointValue || 1)} off</span>
+                         </p>
+                       </div>
+                       <Button onClick={() => setLoyaltyApplied(currentCustomer.loyalty)} className="bg-purple-600 hover:bg-purple-700 text-white shadow-md border-none rounded-xl">
+                         Redeem
+                       </Button>
+                     </div>
+                   </motion.div>
+                 )}
+
+                 {loyaltyApplied > 0 && (
+                   <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 flex justify-between items-center">
+                     <p className="font-bold text-emerald-800 flex items-center gap-2">
+                       <CheckCircle2 size={20} /> Points Applied!
+                     </p>
+                     <button onClick={() => setLoyaltyApplied(0)} className="text-sm font-bold text-red-500 hover:text-red-600 transition-colors">
+                       Remove
+                     </button>
+                   </div>
+                 )}
+
                  <div className="bg-white/60 p-6 rounded-2xl border border-amber-200">
                    <p className="text-amber-900 font-bold text-lg leading-relaxed">
-                     The customer has reviewed the estimate. Do they approve the work and the total amount of ₹{total.toLocaleString()}?
+                     The customer has reviewed the estimate. Do they approve the work and the total amount of ₹{total.toLocaleString(undefined, {minimumFractionDigits: 2})}?
                    </p>
                  </div>
-                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                   <Button onClick={() => handleConsent(true)} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white shadow-xl shadow-emerald-500/30 text-lg h-16 rounded-2xl border border-emerald-500 transition-all">
+                 {decisionMode && decisionMode !== 'approved' && (
+                   <div className="bg-white/70 p-5 rounded-2xl border border-amber-200 space-y-4">
+                     {decisionMode === 'wants_time' && (
+                       <div>
+                         <label className="block text-sm font-bold text-slate-700 mb-2">Reminder Date</label>
+                         <input
+                           type="datetime-local"
+                           className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
+                           value={reminderDate}
+                           onChange={e => setReminderDate(e.target.value)}
+                         />
+                       </div>
+                     )}
+                     <div>
+                       <label className="block text-sm font-bold text-slate-700 mb-2">Remarks</label>
+                       <textarea
+                         className="min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
+                         placeholder={decisionMode === 'wants_time' ? 'Customer wants time to decide...' : 'Reason for not approving...'}
+                         value={decisionRemarks}
+                         onChange={e => setDecisionRemarks(e.target.value)}
+                       />
+                     </div>
+                     <Button
+                       onClick={() => handleNonApproval(decisionMode)}
+                       disabled={decisionSaving}
+                       className="w-full h-12 rounded-xl"
+                       variant={decisionMode === 'not_approved' ? 'danger' : 'primary'}
+                     >
+                       Save Decision
+                     </Button>
+                   </div>
+                 )}
+                 <div className="grid sm:grid-cols-3 gap-4 pt-4">
+                   <Button disabled={decisionSaving} onClick={() => handleConsent(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-xl shadow-emerald-500/30 text-base h-16 rounded-2xl border border-emerald-500 transition-all">
                      Approve & Start Job
                    </Button>
-                   <Button variant="secondary" className="flex-1 text-lg h-16 rounded-2xl shadow-md border-slate-200 hover:border-slate-300 transition-all bg-white" onClick={() => navigate('/service-catalog')}>
-                     Reject & Edit
+                   <Button variant="secondary" className="text-base h-16 rounded-2xl shadow-md border-slate-200 hover:border-slate-300 transition-all bg-white" onClick={() => setDecisionMode('wants_time')}>
+                     <CalendarClock className="mr-2" size={18} /> Wants Time
+                   </Button>
+                   <Button variant="secondary" className="text-base h-16 rounded-2xl shadow-md border-red-200 text-red-700 hover:border-red-300 transition-all bg-white" onClick={() => setDecisionMode('not_approved')}>
+                     <FileX className="mr-2" size={18} /> Not Approved
                    </Button>
                  </div>
                </div>
@@ -201,6 +376,38 @@ const BillingPOS = () => {
                          <p className="text-sm font-medium text-slate-500 flex items-center gap-2">
                            <Clock size={16} className="text-amber-500 animate-pulse" /> Waiting for technician to complete job {activeJobId}.
                          </p>
+                      </div>
+                    )}
+
+                    {warrantyItems.length > 0 && (
+                      <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <h4 className="font-black text-slate-900 mb-3 flex items-center gap-2">
+                          <ShieldCheck className="text-emerald-600" size={20} /> Warranty Serial Capture
+                        </h4>
+                        <div className="space-y-4">
+                          {warrantyItems.map(item => (
+                            <div key={item.id} className="rounded-xl bg-white border border-slate-200 p-4">
+                              <div className="flex justify-between gap-3 mb-3">
+                                <p className="font-bold text-slate-800">{item.name}</p>
+                                <p className="text-xs font-black text-emerald-700 uppercase">{item.warranty || 'Warranty'}</p>
+                              </div>
+                              <div className="grid sm:grid-cols-2 gap-3">
+                                {Array.from({ length: item.qty || 1 }).map((_, index) => (
+                                  <input
+                                    key={`${item.id}-${index}`}
+                                    className="h-10 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm font-medium focus:ring-2 focus:ring-primary-500 outline-none"
+                                    placeholder={`Serial #${index + 1}`}
+                                    value={serialDetails[item.id]?.[index] || ''}
+                                    onChange={e => handleSerialChange(item.id, index, e.target.value)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {!serialsComplete && (
+                          <p className="mt-3 text-sm font-bold text-red-600">Serial numbers are required before invoice generation.</p>
+                        )}
                       </div>
                     )}
                     
@@ -227,7 +434,7 @@ const BillingPOS = () => {
                     <Button 
                       size="lg" 
                       className="w-full h-16 text-xl rounded-2xl shadow-xl shadow-primary-500/30 bg-primary-600 hover:bg-primary-500 transition-all" 
-                      disabled={!paymentMode}
+                      disabled={!paymentMode || !serialsComplete}
                       onClick={handleCheckout}
                     >
                       {paymentMode === 'Cash' ? `Collect Cash ₹${total.toLocaleString()}` : `Pay via ${paymentMode} ₹${total.toLocaleString()}`}

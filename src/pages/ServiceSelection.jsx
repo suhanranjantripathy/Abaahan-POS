@@ -1,26 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppProvider';
+import { useWorkflow, useData } from '../context/AppProvider';
 import { Button, Card } from '../components/ui';
 import { ShoppingCart, Plus, Minus, Tag, ShieldCheck } from 'lucide-react';
 
-const catalog = {
-  tyres: [
-    { id: 't1', name: 'CEAT Milaze X3', category: 'Good', price: 4200, warranty: '3 Years', tags: ['High Life'] },
-    { id: 't2', name: 'Apollo Alnac 4G', category: 'Better', price: 5500, warranty: '4 Years', tags: ['Comfort', 'Grip'] },
-    { id: 't3', name: 'Michelin Primacy 4 ST', category: 'Best', price: 7800, warranty: '5 Years', tags: ['Premium', 'Silent'] },
-  ],
-  services: [
-    { id: 's1', name: 'Wheel Alignment', price: 450 },
-    { id: 's2', name: 'Wheel Balancing (per wheel)', price: 150 },
-    { id: 's3', name: 'General Service', price: 2999 },
-    { id: 's4', name: 'Battery Replacement', price: 4500 },
-  ]
-};
-
 const ServiceSelection = () => {
-  const { estimate, setEstimate } = useApp();
+  const { estimate, setEstimate } = useWorkflow();
+  const { serviceCatalog } = useData();
   const navigate = useNavigate();
+
+  const catalog = serviceCatalog?.inventory || { tyres: [], services: [] };
 
   const [activeTab, setActiveTab] = useState('tyres'); // tyres, services
   const cart = estimate.items || [];
