@@ -18,10 +18,11 @@ const decodePortalToken = (token = '') => {
 
 const CustomerPortal = () => {
   const { token } = useParams();
-  const { customersDb, jobsDb, isLoading } = useData();
+  const { customersDb, jobsDb, isLoading, useRemoteData } = useData();
   const [remotePortal, setRemotePortal] = useState(null);
   const [remoteError, setRemoteError] = useState('');
-  const customerId = remotePortal?.customer?.id || decodePortalToken(token);
+  const [isResolvingPortal, setIsResolvingPortal] = useState(false);
+  const customerId = remotePortal?.customer?.id || (!useRemoteData ? decodePortalToken(token) : '');
   const remoteJob = remotePortal?.job ? {
     id: remotePortal.job.id,
     customerId: remotePortal.job.customer_id,
@@ -49,19 +50,24 @@ const CustomerPortal = () => {
     let cancelled = false;
     const resolveRemote = async () => {
       try {
+        setIsResolvingPortal(true);
         const resolved = await portalService.resolve(token);
         if (!cancelled && resolved) setRemotePortal(resolved);
       } catch (e) {
         if (!cancelled) setRemoteError(e.message || 'Portal link could not be verified.');
+      } finally {
+        if (!cancelled) setIsResolvingPortal(false);
       }
     };
-    resolveRemote();
+    if (useRemoteData) {
+      resolveRemote();
+    }
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, useRemoteData]);
 
-  if (isLoading) {
+  if (isLoading || (useRemoteData && isResolvingPortal)) {
     return <div className="min-h-screen bg-slate-50 grid place-items-center text-slate-500 font-bold">Loading customer portal...</div>;
   }
 

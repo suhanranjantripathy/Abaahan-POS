@@ -1,10 +1,10 @@
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { getCorsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { createPdfBytes } from '../_shared/pdf.ts';
 import { createSupabaseClients, getCurrentUserProfile } from '../_shared/supabase.ts';
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: getCorsHeaders(req) });
+  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405, req);
 
   try {
     const { jobId, report } = await req.json();
@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
       if (error) throw error;
       job = data;
     }
-    if (!job) return jsonResponse({ error: 'jobId or report payload required' }, 400);
+    if (!job) return jsonResponse({ error: 'jobId or report payload required' }, 400, req);
 
     const snapshot = job.snapshot || {};
     const estimate = snapshot.estimate || {};
@@ -46,8 +46,9 @@ Deno.serve(async (req) => {
     if (uploadError) throw uploadError;
 
     const { data: publicUrl } = adminClient.storage.from('reports').getPublicUrl(filePath);
-    return jsonResponse({ ok: true, path: filePath, pdfUrl: publicUrl.publicUrl });
+    return jsonResponse({ ok: true, path: filePath, pdfUrl: publicUrl.publicUrl }, 200, req);
   } catch (error) {
-    return jsonResponse({ error: error.message || 'Unable to generate PDF' }, 400);
+    console.error('generate-report-pdf failed', error);
+    return jsonResponse({ error: 'Unable to generate PDF' }, 400, req);
   }
 });

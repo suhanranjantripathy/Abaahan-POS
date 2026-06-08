@@ -1,4 +1,4 @@
--- Run this in Supabase SQL Editor if Add Employee fails with:
+-- Run in Supabase SQL Editor if Add Employee reports:
 -- "Could not find the 'email' column of 'users' in the schema cache"
 
 alter table public.users

@@ -54,8 +54,8 @@ const EmployeeManagement = () => {
       setError('Work email is required.');
       return;
     }
-    if (form.password.length < 6) {
-      setError('Temporary password must be at least 6 characters.');
+    if (form.password.length < 8) {
+      setError('Temporary password must be at least 8 characters.');
       return;
     }
 
@@ -65,7 +65,8 @@ const EmployeeManagement = () => {
       setSuccess(`${employee.name} was added as ${employee.role}.`);
       setForm({ name: '', email: '', mobile: '', role: 'POS Executive', password: '' });
     } catch (err) {
-      setError(err.message || 'Unable to add employee.');
+      console.error('Unable to add employee', err);
+      setError('Unable to add employee. Check the details and try again, or contact an admin if it continues.');
     } finally {
       setSaving(false);
     }
@@ -146,7 +147,7 @@ const EmployeeManagement = () => {
             <Input
               label="Temporary Password"
               type="password"
-              placeholder="Min. 6 characters"
+              placeholder="Min. 8 characters"
               value={form.password}
               onChange={event => updateField('password', event.target.value)}
               required

@@ -5,6 +5,10 @@ export const createSupabaseClients = (authorization: string | null) => {
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+    throw new Error('Supabase Edge Function secrets are not configured');
+  }
+
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: authorization ? { Authorization: authorization } : {} },
   });

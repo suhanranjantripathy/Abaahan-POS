@@ -1,7 +1,9 @@
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { getCorsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { createSupabaseClients, getCurrentUserProfile } from '../_shared/supabase.ts';
 
 const allowedRoles = ['Store Manager', 'POS Executive', 'Technician'];
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const mobilePattern = /^[0-9+\-\s()]{7,16}$/;
 
 const insertEmployeeProfile = async (
   adminClient: ReturnType<typeof createSupabaseClients>['adminClient'],
@@ -39,16 +41,15 @@ const insertEmployeeProfile = async (
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
-
-  const authorization = req.headers.get('Authorization');
-  const { userClient, adminClient } = createSupabaseClients(authorization);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: getCorsHeaders(req) });
+  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405, req);
 
   try {
+    const authorization = req.headers.get('Authorization');
+    const { userClient, adminClient } = createSupabaseClients(authorization);
     const { profile } = await getCurrentUserProfile(userClient);
     if (profile.role !== 'Store Manager') {
-      return jsonResponse({ error: 'Only Store Managers can add employees' }, 403);
+      return jsonResponse({ error: 'Only Store Managers can add employees' }, 403, req);
     }
 
     const payload = await req.json();
@@ -59,10 +60,16 @@ Deno.serve(async (req) => {
     const password = String(payload.password || '');
 
     if (!name || !email || !password) {
-      return jsonResponse({ error: 'Name, email, and temporary password are required' }, 400);
+      return jsonResponse({ error: 'Name, email, and temporary password are required' }, 400, req);
     }
-    if (password.length < 6) {
-      return jsonResponse({ error: 'Temporary password must be at least 6 characters' }, 400);
+    if (!emailPattern.test(email)) {
+      return jsonResponse({ error: 'Enter a valid work email address' }, 400, req);
+    }
+    if (mobile && !mobilePattern.test(mobile)) {
+      return jsonResponse({ error: 'Enter a valid mobile number' }, 400, req);
+    }
+    if (password.length < 8) {
+      return jsonResponse({ error: 'Temporary password must be at least 8 characters' }, 400, req);
     }
 
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
@@ -91,8 +98,9 @@ Deno.serve(async (req) => {
       throw profileError;
     }
 
-    return jsonResponse({ ok: true, employee: { ...employee, email } });
+    return jsonResponse({ ok: true, employee: { ...employee, email } }, 200, req);
   } catch (error) {
-    return jsonResponse({ error: error.message || 'Unable to create employee' }, 400);
+    console.error('create-employee failed', error);
+    return jsonResponse({ error: 'Unable to create employee. Check employee details and backend setup.' }, 400, req);
   }
 });

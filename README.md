@@ -81,7 +81,8 @@ EMAIL_FROM=your-sender@example.com
 RESEND_API_KEY=your-resend-key
 POSTMARK_SERVER_TOKEN=your-postmark-token
 PORTAL_TOKEN_SECRET=long-random-secret
-APP_ORIGIN=https://your-app-origin
+APP_ORIGIN=https://abaahanpos.netlify.app
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
 ### Run
@@ -150,7 +151,7 @@ If Add Employee reports that the `email` column of `users` is missing from the s
 
 ## Production Notes
 
-- Razorpay Checkout is integrated on the frontend, but server-side payment signature verification is still required before trusting successful payments in production.
+- Razorpay Checkout is integrated on the frontend, but server-side payment signature verification is still required before trusting successful payments in production. Until a `verify-razorpay-payment` Edge Function is added, treat online Razorpay responses as unverified and prefer Cash/manual verification for final billing.
 - `VITE_DATA_BACKEND=api` has a fetch wrapper scaffold, but custom API repositories are not fully implemented yet. Use `local` or `supabase` unless you add the API repository layer.
 - Browser `mailto:` fallback cannot force the sender address. Use the Supabase `send-email` function with a configured provider for production email.
 - Supabase report PDFs use the public `reports` bucket from the migration. Switch to signed URLs if reports must be private.

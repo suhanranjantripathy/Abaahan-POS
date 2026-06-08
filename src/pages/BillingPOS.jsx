@@ -174,10 +174,14 @@ const BillingPOS = () => {
       image: `${window.location.origin}/logo.png`,
       // order_id: fetched from your backend Order API before opening checkout
       handler: function (response) {
-        // TODO: Send response to a Supabase Edge Function to verify HMAC-SHA256 signature
-        // before calling processSuccess() to prevent client-side payment bypass.
-        toast.info(`Payment ID: ${response.razorpay_payment_id} — Verifying...`);
-        processSuccess();
+        console.warn('Unverified Razorpay payment response', response);
+        setEstimate({
+          ...estimate,
+          paymentVerificationStatus: 'unverified',
+          paymentReference: response.razorpay_payment_id || '',
+          paymentMode,
+        });
+        toast.warning('Payment response received but not verified. Use Cash/manual verification before generating the invoice.');
       },
       prefill: {
         name: currentCustomer?.name || "Walk-in Customer",

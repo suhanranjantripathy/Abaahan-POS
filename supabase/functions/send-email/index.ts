@@ -1,4 +1,4 @@
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { getCorsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { createSupabaseClients, getCurrentUserProfile } from '../_shared/supabase.ts';
 
 const emailFrom = () => Deno.env.get('EMAIL_FROM') || 'testtrailattempt@gmail.com';
@@ -40,17 +40,20 @@ const sendViaPostmark = async ({ to, subject, html, text }) => {
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: getCorsHeaders(req) });
+  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405, req);
 
-  const authorization = req.headers.get('Authorization');
-  const { userClient, adminClient } = createSupabaseClients(authorization);
+  let adminClient: ReturnType<typeof createSupabaseClients>['adminClient'] | null = null;
   let logId = null;
 
   try {
+    const authorization = req.headers.get('Authorization');
+    const clients = createSupabaseClients(authorization);
+    const userClient = clients.userClient;
+    adminClient = clients.adminClient;
     const payload = await req.json();
     const { to, subject, html, text, customerId, jobId, attachments = [] } = payload;
-    if (!to || !subject || (!html && !text)) return jsonResponse({ error: 'to, subject, and body are required' }, 400);
+    if (!to || !subject || (!html && !text)) return jsonResponse({ error: 'to, subject, and body are required' }, 400, req);
 
     const { profile } = await getCurrentUserProfile(userClient);
     const { data: log } = await adminClient
@@ -80,11 +83,12 @@ Deno.serve(async (req) => {
         .eq('id', logId);
     }
 
-    return jsonResponse({ ok: true, provider: result.provider, id: result.id });
+    return jsonResponse({ ok: true, provider: result.provider, id: result.id }, 200, req);
   } catch (error) {
-    if (logId) {
+    if (logId && adminClient) {
       await adminClient.from('email_logs').update({ status: 'failed', error: error.message }).eq('id', logId);
     }
-    return jsonResponse({ error: error.message || 'Unable to send email' }, 400);
+    console.error('send-email failed', error);
+    return jsonResponse({ error: 'Unable to send email' }, 400, req);
   }
 });

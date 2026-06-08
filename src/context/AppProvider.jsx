@@ -750,7 +750,7 @@ export const AppProvider = ({ children }) => {
     const reportId = overrides.id || activeJobId || `REP-${Date.now().toString().slice(-6)}`;
     const reportEstimate = overrides.estimate || estimate;
     const portalToken = createPortalToken(currentCustomer?.id, currentCustomer?.mobile);
-    const portalLink = `${window.location.origin}/portal/${portalToken}`;
+    const portalLink = useRemoteData ? '' : `${window.location.origin}/portal/${portalToken}`;
 
     return {
       id: reportId,
@@ -855,12 +855,11 @@ export const AppProvider = ({ children }) => {
       email: employee.email?.trim(),
       mobile: employee.mobile?.trim() || '',
       role: employee.role || 'POS Executive',
-      password: employee.password,
       createdAt: new Date().toISOString(),
     };
 
     const savedEmployee = useRemoteData
-      ? await employeeRepository.create(draft)
+      ? await employeeRepository.create({ ...draft, password: employee.password })
       : draft;
 
     setEmployeesDb(prev => [savedEmployee, ...prev.filter(item => item.id !== savedEmployee.id)]);
@@ -884,7 +883,7 @@ export const AppProvider = ({ children }) => {
     const serialDetails = checkoutDetails.serialDetails || estimate.serialDetails || {};
     const warranties = checkoutDetails.warranties || buildWarrantyRecords(approvedItems, serialDetails, invoiceDate);
     const portalToken = createPortalToken(currentCustomer?.id, currentCustomer?.mobile);
-    const portalLink = checkoutDetails.portalLink || `${window.location.origin}/portal/${portalToken}`;
+    const portalLink = checkoutDetails.portalLink || (useRemoteData ? '' : `${window.location.origin}/portal/${portalToken}`);
     const paidEstimate = {
       ...estimate,
       items: approvedItems,
@@ -973,7 +972,7 @@ export const AppProvider = ({ children }) => {
     const decidedAt = new Date().toISOString();
     const approvedItems = cloneData(estimate.items || []);
     const portalToken = createPortalToken(currentCustomer?.id, currentCustomer?.mobile);
-    const portalLink = `${window.location.origin}/portal/${portalToken}`;
+    const portalLink = useRemoteData ? '' : `${window.location.origin}/portal/${portalToken}`;
     const nextEstimate = {
       ...estimate,
       items: approvedItems,

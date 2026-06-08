@@ -17,6 +17,10 @@ export const portalService = {
       return supabaseFunctionRequest('create-portal-link', { customerId, jobId, expiresInDays });
     }
 
+    if (import.meta.env.PROD) {
+      throw new Error('Secure portal links require Supabase in production.');
+    }
+
     const token = createLocalToken(customerId, customerMobile);
     return {
       token,

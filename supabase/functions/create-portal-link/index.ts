@@ -1,14 +1,14 @@
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { getCorsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { hashToken, randomToken } from '../_shared/crypto.ts';
 import { createSupabaseClients, getCurrentUserProfile } from '../_shared/supabase.ts';
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: getCorsHeaders(req) });
+  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405, req);
 
   try {
     const { customerId, jobId, expiresInDays = 30 } = await req.json();
-    if (!customerId && !jobId) return jsonResponse({ error: 'customerId or jobId is required' }, 400);
+    if (!customerId && !jobId) return jsonResponse({ error: 'customerId or jobId is required' }, 400, req);
 
     const authorization = req.headers.get('Authorization');
     const { userClient, adminClient } = createSupabaseClients(authorization);
@@ -34,13 +34,14 @@ Deno.serve(async (req) => {
 
     if (error) throw error;
 
-    const appOrigin = req.headers.get('Origin') || Deno.env.get('APP_ORIGIN') || '';
+    const appOrigin = Deno.env.get('APP_ORIGIN') || 'https://abaahanpos.netlify.app';
     return jsonResponse({
       token,
       portalUrl: `${appOrigin.replace(/\/$/, '')}/portal/${token}`,
       expiresAt: data.expires_at,
-    });
+    }, 200, req);
   } catch (error) {
-    return jsonResponse({ error: error.message || 'Unable to create portal link' }, 400);
+    console.error('create-portal-link failed', error);
+    return jsonResponse({ error: 'Unable to create portal link' }, 400, req);
   }
 });

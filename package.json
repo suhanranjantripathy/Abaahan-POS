@@ -12,6 +12,7 @@
     "supabase:deploy:functions": "npx supabase functions deploy send-email --project-ref gnbbfccueimtuchtmwzk && npx supabase functions deploy create-employee --project-ref gnbbfccueimtuchtmwzk && npx supabase functions deploy create-portal-link --project-ref gnbbfccueimtuchtmwzk && npx supabase functions deploy resolve-portal-token --project-ref gnbbfccueimtuchtmwzk && npx supabase functions deploy generate-report-pdf --project-ref gnbbfccueimtuchtmwzk"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.43.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.577.0",
@@ -19,14 +20,13 @@
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1",
     "recharts": "^3.8.1",
-    "tailwind-merge": "^3.5.0",
-    "@supabase/supabase-js": "^2.43.0"
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.4.27",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -34,6 +34,6 @@
     "globals": "^17.4.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^3.4.19",
-    "vite": "^5.4.19"
+    "vite": "^8.0.16"
   }
 }
