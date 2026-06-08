@@ -30,7 +30,7 @@ const getPublicEnv = (key, developmentFallback = '') => {
   return isProduction ? '' : developmentFallback;
 };
 
-const productionConfigErrors = [
+export const PRODUCTION_CONFIG_ERRORS = [
   dataBackendMode === 'local'
     ? 'VITE_DATA_BACKEND=local is not allowed in production. Use supabase or api.'
     : '',
@@ -48,9 +48,7 @@ const productionConfigErrors = [
     : '',
 ].filter(Boolean);
 
-if (isProduction && productionConfigErrors.length > 0) {
-  throw new Error(`Production configuration is not secure:\n${productionConfigErrors.join('\n')}`);
-}
+export const isProductionConfigValid = !isProduction || PRODUCTION_CONFIG_ERRORS.length === 0;
 
 export const EXTERNAL_SERVICES = {
   employeeAuthUrl: getPublicEnv('VITE_EMPLOYEE_AUTH_URL', 'https://script.google.com/macros/s/AKfycbwaABq2wQffYVwKjq3MzpPweySrd_RwhtMxXv1j-1wo1y4tcYFtDVdbZGS-tONiZLdy/exec'),

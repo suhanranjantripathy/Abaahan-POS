@@ -5,8 +5,10 @@ import App from './App.jsx'
 import './index.css'
 import { AppProvider } from './context/AppProvider.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import ConfigError from './components/ConfigError.jsx'
+import { isProductionConfigValid } from './config/appConfig.js'
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+const app = isProductionConfigValid ? (
   <React.StrictMode>
     <BrowserRouter>
       <AppProvider>
@@ -15,5 +17,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         </ErrorBoundary>
       </AppProvider>
     </BrowserRouter>
-  </React.StrictMode>,
-)
+  </React.StrictMode>
+) : <ConfigError />;
+
+ReactDOM.createRoot(document.getElementById('root')).render(app)
