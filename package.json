@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "supabase:deploy:create-employee": "npx supabase functions deploy create-employee --project-ref gnbbfccueimtuchtmwzk",
+    "supabase:deploy:functions": "npx supabase functions deploy send-email --project-ref gnbbfccueimtuchtmwzk && npx supabase functions deploy create-employee --project-ref gnbbfccueimtuchtmwzk && npx supabase functions deploy create-portal-link --project-ref gnbbfccueimtuchtmwzk && npx supabase functions deploy resolve-portal-token --project-ref gnbbfccueimtuchtmwzk && npx supabase functions deploy generate-report-pdf --project-ref gnbbfccueimtuchtmwzk"
   },
   "dependencies": {
     "clsx": "^2.1.1",

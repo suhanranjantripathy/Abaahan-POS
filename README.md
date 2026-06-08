@@ -115,7 +115,26 @@ The Supabase assets live in `supabase/`.
   - `resolve-portal-token`
   - `generate-report-pdf`
 
+  ```bash
+  npx supabase login
+  npx supabase functions deploy create-employee --project-ref gnbbfccueimtuchtmwzk
+  ```
+
+  If deploy still says `Access token not provided`, generate a personal access token in Supabase Dashboard > Account > Access Tokens and run:
+
+  ```bash
+  SUPABASE_ACCESS_TOKEN=your-token npx supabase functions deploy create-employee --project-ref gnbbfccueimtuchtmwzk
+  ```
+
+  Or use the project script:
+
+  ```bash
+  npm run supabase:deploy:create-employee
+  ```
+
 The schema enables RLS and tenant policies around each shop. Make sure authenticated users have a matching profile row in `public.users` with a valid `shop_id`.
+
+If Add Employee reports that the `email` column of `users` is missing from the schema cache, run `supabase/fix_users_email_column.sql` in the Supabase SQL Editor, then redeploy `create-employee`.
 
 ## Application Flow
 

@@ -56,19 +56,30 @@ export const supabaseFunctionRequest = async (functionName, body = {}) => {
 
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token || BACKEND_CONFIG.supabaseAnonKey;
-  const response = await fetch(`${BACKEND_CONFIG.supabaseUrl.replace(/\/$/, '')}/functions/v1/${functionName}`, {
-    method: 'POST',
-    headers: {
-      apikey: BACKEND_CONFIG.supabaseAnonKey,
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  let response;
+  try {
+    response = await fetch(`${BACKEND_CONFIG.supabaseUrl.replace(/\/$/, '')}/functions/v1/${functionName}`, {
+      method: 'POST',
+      headers: {
+        apikey: BACKEND_CONFIG.supabaseAnonKey,
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    const message = error instanceof TypeError && error.message === 'Failed to fetch'
+      ? `Supabase Edge Function "${functionName}" could not be reached. Deploy it with "supabase functions deploy ${functionName}" and confirm the project URL in VITE_SUPABASE_URL.`
+      : error.message || `Function ${functionName} could not be reached.`;
+    throw new Error(message);
+  }
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || `Function ${functionName} failed with status ${response.status}`);
+    const notFoundMessage = response.status === 404
+      ? `Supabase Edge Function "${functionName}" is not deployed. Run "supabase functions deploy ${functionName}" for this Supabase project.`
+      : '';
+    throw new Error(payload.error || payload.message || notFoundMessage || `Function ${functionName} failed with status ${response.status}`);
   }
   return payload;
 };

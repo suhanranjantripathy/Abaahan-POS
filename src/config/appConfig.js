@@ -21,19 +21,50 @@ export const DEFAULT_REWARD_RULES = {
   redemptionValue: 1,
 };
 
+const isProduction = import.meta.env.PROD;
+const dataBackendMode = import.meta.env.VITE_DATA_BACKEND || 'local';
+
+const getPublicEnv = (key, developmentFallback = '') => {
+  const value = import.meta.env[key];
+  if (value) return value;
+  return isProduction ? '' : developmentFallback;
+};
+
+const productionConfigErrors = [
+  dataBackendMode === 'local'
+    ? 'VITE_DATA_BACKEND=local is not allowed in production. Use supabase or api.'
+    : '',
+  dataBackendMode === 'supabase' && !import.meta.env.VITE_SUPABASE_URL
+    ? 'VITE_SUPABASE_URL is required when VITE_DATA_BACKEND=supabase.'
+    : '',
+  dataBackendMode === 'supabase' && !import.meta.env.VITE_SUPABASE_ANON_KEY
+    ? 'VITE_SUPABASE_ANON_KEY is required when VITE_DATA_BACKEND=supabase.'
+    : '',
+  dataBackendMode === 'api' && !import.meta.env.VITE_API_BASE_URL
+    ? 'VITE_API_BASE_URL is required when VITE_DATA_BACKEND=api.'
+    : '',
+  isProduction && import.meta.env.VITE_API_TOKEN
+    ? 'VITE_API_TOKEN is bundled into browser code and must not be used as a production secret.'
+    : '',
+].filter(Boolean);
+
+if (isProduction && productionConfigErrors.length > 0) {
+  throw new Error(`Production configuration is not secure:\n${productionConfigErrors.join('\n')}`);
+}
+
 export const EXTERNAL_SERVICES = {
-  employeeAuthUrl: import.meta.env.VITE_EMPLOYEE_AUTH_URL || 'https://script.google.com/macros/s/AKfycbwaABq2wQffYVwKjq3MzpPweySrd_RwhtMxXv1j-1wo1y4tcYFtDVdbZGS-tONiZLdy/exec',
-  razorpayScriptUrl: import.meta.env.VITE_RAZORPAY_SCRIPT_URL || 'https://checkout.razorpay.com/v1/checkout.js',
-  razorpayKey: import.meta.env.VITE_RAZORPAY_KEY || '',
-  emailFrom: import.meta.env.VITE_EMAIL_FROM || 'testtrailattempt@gmail.com',
+  employeeAuthUrl: getPublicEnv('VITE_EMPLOYEE_AUTH_URL', 'https://script.google.com/macros/s/AKfycbwaABq2wQffYVwKjq3MzpPweySrd_RwhtMxXv1j-1wo1y4tcYFtDVdbZGS-tONiZLdy/exec'),
+  razorpayScriptUrl: getPublicEnv('VITE_RAZORPAY_SCRIPT_URL', 'https://checkout.razorpay.com/v1/checkout.js'),
+  razorpayKey: getPublicEnv('VITE_RAZORPAY_KEY'),
+  emailFrom: getPublicEnv('VITE_EMAIL_FROM'),
 };
 
 export const BACKEND_CONFIG = {
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '',
-  apiToken: import.meta.env.VITE_API_TOKEN || '',
-  supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
-  supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
-  mode: import.meta.env.VITE_DATA_BACKEND || 'local',
+  apiBaseUrl: getPublicEnv('VITE_API_BASE_URL'),
+  apiToken: getPublicEnv('VITE_API_TOKEN'),
+  supabaseUrl: getPublicEnv('VITE_SUPABASE_URL'),
+  supabaseAnonKey: getPublicEnv('VITE_SUPABASE_ANON_KEY'),
+  mode: dataBackendMode,
 };
 
 export const DEFAULT_SERVICE_CATALOG = {

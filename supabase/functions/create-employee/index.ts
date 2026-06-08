@@ -3,6 +3,41 @@ import { createSupabaseClients, getCurrentUserProfile } from '../_shared/supabas
 
 const allowedRoles = ['Store Manager', 'POS Executive', 'Technician'];
 
+const insertEmployeeProfile = async (
+  adminClient: ReturnType<typeof createSupabaseClients>['adminClient'],
+  profile: { shop_id: string },
+  authUserId: string,
+  employee: { role: string; name: string; email: string; mobile: string },
+) => {
+  const baseProfile = {
+    id: authUserId,
+    shop_id: profile.shop_id,
+    role: employee.role,
+    name: employee.name,
+    mobile: employee.mobile,
+  };
+
+  const { data, error } = await adminClient
+    .from('users')
+    .insert({ ...baseProfile, email: employee.email })
+    .select()
+    .single();
+
+  if (!error) return data;
+
+  const missingEmailColumn = /'email' column of 'users'|column users\.email does not exist/i.test(error.message || '');
+  if (!missingEmailColumn) throw error;
+
+  const { data: fallbackData, error: fallbackError } = await adminClient
+    .from('users')
+    .insert(baseProfile)
+    .select()
+    .single();
+
+  if (fallbackError) throw fallbackError;
+  return fallbackData;
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -43,20 +78,15 @@ Deno.serve(async (req) => {
     if (authError) throw authError;
 
     const authUser = authData.user;
-    const { data: employee, error: profileError } = await adminClient
-      .from('users')
-      .insert({
-        id: authUser.id,
-        shop_id: profile.shop_id,
+    let employee;
+    try {
+      employee = await insertEmployeeProfile(adminClient, profile, authUser.id, {
         role,
         name,
         email,
         mobile,
-      })
-      .select()
-      .single();
-
-    if (profileError) {
+      });
+    } catch (profileError) {
       await adminClient.auth.admin.deleteUser(authUser.id).catch(() => {});
       throw profileError;
     }
